@@ -4,6 +4,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,9 +16,18 @@ import javax.inject.Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class ApplicationScope
 
+/** 블로킹 SDK 초기화용. 테스트에서 테스트 디스패처로 바꿔 끼운다 */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class IoDispatcher
+
 @Module
 @InstallIn(SingletonComponent::class)
 object CoroutineModule {
+
+    @Provides
+    @IoDispatcher
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
     @Provides
     @Singleton

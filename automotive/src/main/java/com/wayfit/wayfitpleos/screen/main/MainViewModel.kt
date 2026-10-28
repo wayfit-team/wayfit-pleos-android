@@ -2,6 +2,7 @@ package com.wayfit.wayfitpleos.screen.main
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.wayfit.wayfitpleos.data.di.IoDispatcher
 import com.wayfit.wayfitpleos.data.repository.CouponRepository
 import com.wayfit.wayfitpleos.data.repository.DemoCommand
 import com.wayfit.wayfitpleos.data.repository.DemoRepository
@@ -14,7 +15,7 @@ import com.wayfit.wayfitpleos.model.SdkStatus
 import com.wayfit.wayfitpleos.model.TripPolicy
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,6 +31,7 @@ class MainViewModel @Inject constructor(
     private val couponRepository: CouponRepository,
     private val pairingRepository: PairingRepository,
     private val demoRepository: DemoRepository,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : BaseViewModel<MainState, MainEvent>() {
 
     override fun getInitialState(): MainState = MainState()
@@ -57,7 +59,7 @@ class MainViewModel @Inject constructor(
         if (sdkStarted) return
         sdkStarted = true
         viewModelScope.launch {
-            val sdk = withContext(Dispatchers.IO) {
+            val sdk = withContext(ioDispatcher) {
                 val vehicle = vehicleRepository.start()
                 val navi = naviRepository.start()
                 val location = locationRepository.start(fusedLocationGranted)
