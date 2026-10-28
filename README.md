@@ -9,8 +9,13 @@
   - AVD 설정: Automotive → Pleos Connect v2.1.0, RAM 4GB, Default boot = Cold
 
 ## Pleos Playground 키 설정
-키는 git에 올리지 않는다. 프로젝트 루트의 `local.properties`(gitignore 대상) 또는 `~/.gradle/gradle.properties`(레포 밖)에 추가.
-**프로젝트의 `gradle.properties`에는 넣지 않는다** (git에 올라간다).
+`gradle.properties`는 git에서 제외된다. 클론 후 템플릿을 복사해서 키를 채운다.
+
+```bash
+cp gradle.properties.example gradle.properties
+```
+
+(`local.properties`나 `~/.gradle/gradle.properties`에 넣어도 읽는다)
 
 ```properties
 pleos.projectId=<프로젝트 ID>
