@@ -5,6 +5,9 @@ import ai.pleos.playground.stt.listener.ResultListener
 import ai.pleos.playground.tts.TextToSpeech
 import ai.pleos.playground.tts.listener.EventListener
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import android.util.Log
 import com.wayfit.wayfitpleos.BuildConfig
 import kotlinx.coroutines.CompletableDeferred
@@ -21,7 +24,8 @@ import ai.pleos.playground.tts.listener.OnServerConnectionListener as TtsServerL
  * HYBRID 모드: 서버 우선, 네트워크가 없으면 온디바이스. 서버를 쓰려면 Client ID/Secret 으로 registerApp 필요
  * (값은 local.properties → BuildConfig, 비어 있으면 온디바이스로만 동작).
  */
-class PleosVoice(context: Context) {
+@Singleton
+class PleosVoice @Inject constructor(@ApplicationContext context: Context) {
 
     private val appContext = context.applicationContext
     private val tts by lazy { TextToSpeech(appContext, TtsMode.HYBRID) }
