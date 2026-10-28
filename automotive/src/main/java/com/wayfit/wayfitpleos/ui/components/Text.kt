@@ -16,9 +16,15 @@ private const val WORD_JOINER = '⁠'
  * (Android 의 Phrase 줄바꿈은 한국어를 지원하지 않는 버전이 있음)
  */
 internal fun String.keepAll(): String = buildString(length * 2) {
-    this@keepAll.forEachIndexed { i, c ->
-        if (i > 0 && !c.isWhitespace() && !this@keepAll[i - 1].isWhitespace()) append(WORD_JOINER)
-        append(c)
+    var prev = -1
+    var i = 0
+    while (i < this@keepAll.length) {
+        // 코드포인트 단위로 순회: 이모지(서로게이트 쌍) 사이에 끼워 넣으면 글자가 깨진다
+        val cp = this@keepAll.codePointAt(i)
+        if (prev != -1 && Character.isLetterOrDigit(prev) && Character.isLetterOrDigit(cp)) append(WORD_JOINER)
+        appendCodePoint(cp)
+        prev = cp
+        i += Character.charCount(cp)
     }
 }
 

@@ -1,11 +1,12 @@
 package com.wayfit.wayfitpleos.data
 
 import com.wayfit.wayfitpleos.model.Coupon
+import com.wayfit.wayfitpleos.model.GeoPoint
 import com.wayfit.wayfitpleos.model.RouteSummary
 import com.wayfit.wayfitpleos.model.Store
 import com.wayfit.wayfitpleos.model.StoreCategory
 
-/** UI PoC용 가짜 데이터. 데모 경로: 아주대학교 → 광교호수공원 */
+/** PoC용 가짜 데이터 (백엔드 연동 전). 데모 경로: 아주대학교 → 광교호수공원. 매장은 가상 */
 object FakeData {
 
     val route = RouteSummary(
@@ -16,9 +17,18 @@ object FakeData {
     )
 
     val stores = listOf(
-        Store("s1", "광교 모퉁이커피", StoreCategory.CAFE, "아메리카노 1잔 무료", aheadKm = 1.2, detourMin = 3),
-        Store("s2", "원천동 손칼국수", StoreCategory.FOOD, "공깃밥·음료 서비스", aheadKm = 2.4, detourMin = 4),
-        Store("s3", "매탄 아침빵집", StoreCategory.BAKERY, "소금빵 1개 증정", aheadKm = 0.9, detourMin = 2),
+        Store(
+            "s1", "광교 모퉁이커피", StoreCategory.CAFE, "아메리카노 1잔 무료",
+            location = GeoPoint(37.2842, 127.0530), aheadKm = 1.2, detourMin = 3,
+        ),
+        Store(
+            "s2", "원천동 손칼국수", StoreCategory.FOOD, "공깃밥·음료 서비스",
+            location = GeoPoint(37.2790, 127.0480), aheadKm = 2.4, detourMin = 4,
+        ),
+        Store(
+            "s3", "매탄 아침빵집", StoreCategory.BAKERY, "소금빵 1개 증정",
+            location = GeoPoint(37.2700, 127.0450), aheadKm = 0.9, detourMin = 2,
+        ),
     )
 
     val coupons = listOf(

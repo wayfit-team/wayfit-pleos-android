@@ -51,6 +51,7 @@ fun DriveScreen(
     route: RouteSummary,
     tripRecommendCount: Int,
     phonePaired: Boolean,
+    listening: Boolean,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     onCancelVisit: () -> Unit,
@@ -76,7 +77,7 @@ fun DriveScreen(
             ) {
                 when (target) {
                     DrivePhase.Idle -> IdleContent(route, tripRecommendCount)
-                    is DrivePhase.Recommending -> RecommendContent(target, onAccept, onDecline)
+                    is DrivePhase.Recommending -> RecommendContent(target, listening, onAccept, onDecline)
                     is DrivePhase.Visiting -> VisitContent(target, onCancelVisit)
                     is DrivePhase.Verified -> VerifiedContent(target, phonePaired, onSendToPhone, onDismissResult)
                 }
@@ -126,6 +127,7 @@ private fun IdleContent(route: RouteSummary, tripRecommendCount: Int) {
 @Composable
 private fun RecommendContent(
     phase: DrivePhase.Recommending,
+    listening: Boolean,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
 ) {
@@ -164,6 +166,11 @@ private fun RecommendContent(
             SecondaryBigButton("괜찮아요", onDecline, Modifier.weight(1f))
             PrimaryBigButton("들를게요", onAccept, Modifier.weight(1.2f))
         }
+        Text(
+            if (listening) "🎙 듣고 있어요 · \"응\" 또는 \"아니\"" else "말로도 답할 수 있어요 · \"응\" / \"아니\"",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (listening) WayfitColors.Mint else WayfitColors.TextSecondary,
+        )
         LinearProgressIndicator(
             progress = { phase.secondsLeft / RECOMMEND_TIMEOUT_SEC.toFloat() },
             modifier = Modifier

@@ -69,6 +69,7 @@ fun WayfitRoot(vm: WayfitViewModel = viewModel()) {
                         route = state.route,
                         tripRecommendCount = state.tripRecommendCount,
                         phonePaired = state.pair is PairState.Paired,
+                        listening = state.listening,
                         onAccept = vm::accept,
                         onDecline = vm::decline,
                         onCancelVisit = vm::cancelVisit,
@@ -172,6 +173,7 @@ private fun DemoPanel(vm: WayfitViewModel, state: UiState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("DEMO", style = MaterialTheme.typography.labelMedium, color = WayfitColors.Amber)
+        Text(sdkSummary(state), style = MaterialTheme.typography.labelMedium, color = WayfitColors.TextSecondary)
         DemoChip(if (state.driving) "정차로 전환" else "주행으로 전환", vm::demoToggleDriving)
         DemoChip("추천 띄우기", vm::demoRecommend)
         DemoChip("매장 도착·주차", vm::demoArriveAndPark)
@@ -187,4 +189,9 @@ private fun DemoChip(label: String, onClick: () -> Unit) {
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
         colors = AssistChipDefaults.assistChipColors(labelColor = WayfitColors.TextPrimary),
     )
+}
+
+private fun sdkSummary(state: UiState): String = with(state.sdk) {
+    fun mark(ok: Boolean) = if (ok) "✓" else "✗"
+    "SDK 차량${mark(vehicle)} 내비${mark(navi)} 위치${mark(location)} TTS${mark(tts)} STT${mark(stt)}"
 }
