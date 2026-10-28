@@ -2,6 +2,19 @@
 
 경로 위 동네 가게를 음성으로 추천하고, 들르면 차량 데이터로 방문을 인증해 쿠폰을 주는 앱.
 
+## 화면 (Pleos Connect v2.1.0 에뮬레이터)
+| 주행 · 대기 | 경로 위 매장 추천 |
+|---|---|
+| ![주행 대기](docs/screenshots/01_idle.png) | ![추천](docs/screenshots/02_recommend.png) |
+| **방문 진행** (경유지 추가 → 도착 → 주차) | **주행 중 잠금** (정차 전용 화면) |
+| ![방문](docs/screenshots/03_visiting.png) | ![주행 중 잠금](docs/screenshots/04_driving_gate.png) |
+| **쿠폰 도착** (차량 데이터로 방문 인증) | **쿠폰함** |
+| ![쿠폰 도착](docs/screenshots/05_verified.png) | ![쿠폰함](docs/screenshots/06_coupons.png) |
+| **설정** (연결된 폰 관리 · 음성 안내) | **폰 연결** (QR · 8자리 코드) |
+| ![설정](docs/screenshots/07_settings.png) | ![폰 연결](docs/screenshots/08_pair.png) |
+
+시나리오: 주행 중 경로 위 제휴 매장을 카드 + 음성("들를까요?")으로 추천 → "응"/"들를게요"로 경유지 추가 → 매장 반경 진입 + 기어 P단으로 방문 인증 → 쿠폰 발급 → QR로 연결한 폰에서 사용.
+
 ## 개발 환경
 - Android Studio, JDK 17+, minSdk 28 / compileSdk·targetSdk 34, Hilt + KSP
 - 에뮬레이터: **Pleos Connect v2.1.0** 시스템 이미지 (API 34, `system-images;android-34;pleos_car_emulator;arm64-v8a`)
