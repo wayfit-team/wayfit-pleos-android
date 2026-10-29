@@ -38,7 +38,8 @@ internal class DefaultStoreRepositoryTest {
             val movedDistance = mountainView.distanceTo(moved.location)
             val originalDistance = DefaultStoreRepository.DEMO_ORIGIN.distanceTo(original.location)
             assertTrue(movedDistance < 3_000, "${moved.name}: ${movedDistance}m")
-            assertEquals(originalDistance, movedDistance, 50.0)
+            // 미터 단위로 옮기므로 위도가 달라도 거리가 보존된다 (리뷰 2-3)
+            assertEquals(originalDistance, movedDistance, 5.0)
         }
     }
 }

@@ -17,6 +17,12 @@ data class GeoPoint(val lat: Double, val lng: Double) {
         return 2 * EARTH_RADIUS_M * asin(sqrt(a))
     }
 
+    /** [origin] 에서 이 지점까지 북쪽·동쪽 방향 거리(m). [offset] 의 역 (짧은 거리용 근사) */
+    fun northEastFrom(origin: GeoPoint): Pair<Double, Double> = Pair(
+        Math.toRadians(lat - origin.lat) * EARTH_RADIUS_M,
+        Math.toRadians(lng - origin.lng) * EARTH_RADIUS_M * cos(Math.toRadians(origin.lat)),
+    )
+
     /** 북쪽·동쪽으로 [northM], [eastM] 미터 옮긴 지점 (짧은 거리용 근사) */
     fun offset(northM: Double, eastM: Double): GeoPoint = GeoPoint(
         lat = lat + Math.toDegrees(northM / EARTH_RADIUS_M),

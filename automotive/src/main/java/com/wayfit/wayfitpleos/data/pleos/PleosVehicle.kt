@@ -31,7 +31,7 @@ class PleosVehicle @Inject constructor(@ApplicationContext context: Context) {
     private val appContext = context.applicationContext
     // 비 Pleos 기기에서는 생성 자체가 실패할 수 있어 start() 안에서 처음 만든다
     private val vehicle by lazy { Vehicle(appContext) }
-    private var started = false
+    @Volatile private var started = false
 
     private val _gear = MutableStateFlow<VehicleGear?>(null)
     val gear: StateFlow<VehicleGear?> = _gear.asStateFlow()

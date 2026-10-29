@@ -21,7 +21,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -38,7 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import com.wayfit.wayfitpleos.model.Pairing
+import com.wayfit.wayfitpleos.model.PairingCode
 import com.wayfit.wayfitpleos.ui.theme.WayfitColor
 import com.wayfit.wayfitpleos.ui.theme.WayfitShape
 import com.wayfit.wayfitpleos.ui.theme.WayfitSize
@@ -56,7 +55,6 @@ fun PairScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.fetchData() }
 
     Box(
         modifier = Modifier
@@ -66,10 +64,11 @@ fun PairScreen(
     ) {
         BackButton(onBack, Modifier.align(Alignment.TopStart))
         Box(Modifier.widthIn(max = WayfitSize.ContentMaxWidth)) {
-            when (val pairing = state.pairing) {
-                Pairing.NotPaired -> PrimaryButton("연결 코드 받기", viewModel::requestNewCode)
-                is Pairing.Showing -> ShowingCode(pairing, viewModel::requestNewCode)
-                is Pairing.Paired -> PairedContent(pairing, viewModel::requestNewCode)
+            val code = state.code
+            when {
+                state.justPaired -> PairedContent(state.phoneCount, viewModel::requestNewCode)
+                code != null -> ShowingCode(code, viewModel::requestNewCode)
+                else -> PrimaryButton("연결 코드 받기", viewModel::requestNewCode)
             }
         }
     }
@@ -91,10 +90,10 @@ private fun BackButton(onBack: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun ShowingCode(pairing: Pairing.Showing, onNewCode: () -> Unit) {
-    val expired = pairing.secondsLeft <= 0
+private fun ShowingCode(pairing: PairingCode, onNewCode: () -> Unit) {
+    val expired = pairing.expired
     Row(horizontalArrangement = Arrangement.spacedBy(WayfitSpace.XL), verticalAlignment = Alignment.CenterVertically) {
-        val qr = remember(pairing.code) { qrBitmap(Pairing.URL_BASE + pairing.code) }
+        val qr = remember(pairing.code) { qrBitmap(PairingCode.URL_BASE + pairing.code) }
         Box(
             modifier = Modifier
                 .size(300.dp)
@@ -142,7 +141,7 @@ private fun ShowingCode(pairing: Pairing.Showing, onNewCode: () -> Unit) {
 }
 
 @Composable
-private fun PairedContent(pairing: Pairing.Paired, onAddPhone: () -> Unit) {
+private fun PairedContent(phoneCount: Int, onAddPhone: () -> Unit) {
     WayfitCard {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -151,7 +150,7 @@ private fun PairedContent(pairing: Pairing.Paired, onAddPhone: () -> Unit) {
             IconTile(Icons.Rounded.CheckCircle, tint = WayfitColor.OnBrand, background = WayfitColor.Brand, size = 96.dp)
             Text("폰이 연결됐어요", style = MaterialTheme.typography.headlineLarge)
             Text(
-                "연결된 폰 ${pairing.phoneCount}대 · 쿠폰은 폰의 웨이핏 쿠폰함에서 확인하세요",
+                "연결된 폰 ${phoneCount}대 · 쿠폰은 폰의 웨이핏 쿠폰함에서 확인하세요",
                 style = MaterialTheme.typography.bodyLarge,
                 color = WayfitColor.TextSecondary,
                 textAlign = TextAlign.Center,

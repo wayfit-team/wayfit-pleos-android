@@ -1,9 +1,7 @@
 package com.wayfit.wayfitpleos.screen.settings
 
-import com.wayfit.wayfitpleos.data.repository.PairingRepository
+import com.wayfit.wayfitpleos.data.repository.DefaultPairingRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
-import com.wayfit.wayfitpleos.model.PairedPhone
-import com.wayfit.wayfitpleos.model.Pairing
 import com.wayfit.wayfitpleos.testbase.JUnit5Test
 import io.mockk.every
 import io.mockk.mockk
@@ -20,68 +18,60 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class SettingsViewModelTest : JUnit5Test() {
 
-    private val galaxy = PairedPhone("p1", "Galaxy S25", 0L)
-    private val iphone = PairedPhone("p2", "iPhone 17", 0L)
-
-    private val pairing = MutableStateFlow<Pairing>(Pairing.Paired(listOf(galaxy, iphone)))
     private val voiceGuide = MutableStateFlow(true)
 
-    private lateinit var pairingRepository: PairingRepository
+    /** 실제 구현을 써서 "코드 발급 중에도 목록이 보이는지"를 그대로 확인 */
+    private lateinit var pairingRepository: DefaultPairingRepository
     private lateinit var settingsRepository: SettingsRepository
-    private lateinit var sut: SettingsViewModel
 
     @BeforeEach
     override fun setup() {
         super.setup()
-        pairingRepository = mockk(relaxed = true) { every { pairing } returns this@SettingsViewModelTest.pairing }
+        pairingRepository = DefaultPairingRepository(testScope.backgroundScope)
         settingsRepository = mockk(relaxed = true) { every { voiceGuideEnabled } returns voiceGuide }
-        sut = SettingsViewModel(pairingRepository, settingsRepository)
-        sut.fetchData()
-        testScope.runCurrent()
     }
+
+    private fun create() = SettingsViewModel(pairingRepository, settingsRepository).also { testScope.runCurrent() }
 
     @Test
     fun `연결된 폰 목록과 음성 안내 설정을 보여준다`() {
-        assertEquals(SettingsState(phones = listOf(galaxy, iphone), voiceGuideEnabled = true), sut.stateFlow.value)
+        pairingRepository.demoPhonePaired()
+        pairingRepository.demoPhonePaired()
+        val sut = create()
+
+        assertEquals(listOf("Galaxy S25", "iPhone 17"), sut.stateFlow.value.phones.map { it.name })
+        assertEquals(true, sut.stateFlow.value.voiceGuideEnabled)
     }
 
     @Test
-    fun `새 코드를 띄우는 동안에도 기존 폰 목록은 유지한다`() {
-        pairing.value = Pairing.Showing("12345678", 600)
+    fun `연결 코드를 띄우는 중에 설정 화면을 처음 열어도 폰 목록이 보인다 (리뷰 1-2)`() {
+        pairingRepository.demoPhonePaired()
+        pairingRepository.requestCode() // 다른 폰 연결 화면에 들어갔다가 그냥 나온 상황
         testScope.runCurrent()
 
-        assertEquals(listOf(galaxy, iphone), sut.stateFlow.value.phones)
-    }
+        val sut = create()
 
-    @Test
-    fun `미연결이면 빈 목록`() {
-        pairing.value = Pairing.NotPaired
-        testScope.runCurrent()
-
-        assertEquals(emptyList<PairedPhone>(), sut.stateFlow.value.phones)
+        assertEquals(1, sut.stateFlow.value.phones.size)
     }
 
     @Test
     fun `폰 한 대 연결 해제 후 안내 메시지`() {
+        pairingRepository.demoPhonePaired()
+        val sut = create()
         val events = mutableListOf<SettingsEvent>()
         testScope.backgroundScope.launch { sut.eventFlow.collect(events::add) }
         testScope.runCurrent()
 
-        sut.disconnect(galaxy)
+        sut.disconnect(sut.stateFlow.value.phones.single())
         testScope.runCurrent()
 
-        verify { pairingRepository.disconnect("p1") }
+        assertEquals(emptyList<Any>(), sut.stateFlow.value.phones)
         assertEquals(listOf(SettingsEvent.ShowMessage("Galaxy S25 연결을 해제했어요")), events)
     }
 
     @Test
-    fun `모두 해제`() {
-        sut.disconnectAll()
-        verify { pairingRepository.disconnectAll() }
-    }
-
-    @Test
     fun `음성 안내 끄기`() {
+        val sut = create()
         sut.setVoiceGuideEnabled(false)
         verify { settingsRepository.setVoiceGuideEnabled(false) }
 

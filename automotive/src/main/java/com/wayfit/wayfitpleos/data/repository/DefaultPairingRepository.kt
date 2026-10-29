@@ -2,7 +2,7 @@ package com.wayfit.wayfitpleos.data.repository
 
 import com.wayfit.wayfitpleos.data.di.ApplicationScope
 import com.wayfit.wayfitpleos.model.PairedPhone
-import com.wayfit.wayfitpleos.model.Pairing
+import com.wayfit.wayfitpleos.model.PairingCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,11 +21,11 @@ class DefaultPairingRepository @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope,
 ) : PairingRepository {
 
-    private val _pairing = MutableStateFlow<Pairing>(Pairing.NotPaired)
-    override val pairing: StateFlow<Pairing> = _pairing.asStateFlow()
+    private val _phones = MutableStateFlow<List<PairedPhone>>(emptyList())
+    override val phones: StateFlow<List<PairedPhone>> = _phones.asStateFlow()
 
-    /** 코드 화면을 띄우는 동안에도 이미 연결된 폰 목록은 유지한다 */
-    private val phones = MutableStateFlow<List<PairedPhone>>(emptyList())
+    private val _code = MutableStateFlow<PairingCode?>(null)
+    override val code: StateFlow<PairingCode?> = _code.asStateFlow()
 
     private var countdown: Job? = null
 
@@ -33,37 +33,32 @@ class DefaultPairingRepository @Inject constructor(
         countdown?.cancel()
         val code = (1..8).joinToString("") { Random.nextInt(10).toString() }
         countdown = scope.launch {
-            for (left in Pairing.CODE_TTL_SEC downTo 0) {
-                _pairing.value = Pairing.Showing(code, left)
+            for (left in PairingCode.TTL_SEC downTo 0) {
+                _code.value = PairingCode(code, left)
                 delay(1_000)
             }
         }
     }
 
     override fun disconnect(phoneId: String) {
-        phones.update { list -> list.filterNot { it.id == phoneId } }
-        publishPhones()
+        _phones.update { list -> list.filterNot { it.id == phoneId } }
     }
 
     override fun disconnectAll() {
-        phones.value = emptyList()
-        publishPhones()
+        _phones.value = emptyList()
     }
 
+    /** 폰이 코드로 연결되면 그 코드는 끝난다 (1회용) */
     override fun demoPhonePaired() {
         val names = listOf("Galaxy S25", "iPhone 17", "Galaxy Z Flip7")
-        phones.update { list ->
+        _phones.update { list ->
             list + PairedPhone(
                 id = UUID.randomUUID().toString(),
                 name = names[list.size % names.size],
                 connectedAtMillis = System.currentTimeMillis(),
             )
         }
-        publishPhones()
-    }
-
-    private fun publishPhones() {
         countdown?.cancel()
-        _pairing.value = phones.value.takeIf { it.isNotEmpty() }?.let(Pairing::Paired) ?: Pairing.NotPaired
+        _code.value = null
     }
 }

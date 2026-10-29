@@ -20,6 +20,7 @@ class DefaultNaviRepository @Inject constructor(
     @ApplicationScope scope: CoroutineScope,
 ) : NaviRepository {
 
+    @Volatile
     override var isAvailable: Boolean = false
         private set
 
@@ -40,7 +41,10 @@ class DefaultNaviRepository @Inject constructor(
 
     override fun start(): Boolean = navi.start().also { isAvailable = it }
 
-    override fun stop() = navi.stop()
+    override fun stop() {
+        navi.stop()
+        isAvailable = false
+    }
 
     override fun refresh() = navi.refresh()
 

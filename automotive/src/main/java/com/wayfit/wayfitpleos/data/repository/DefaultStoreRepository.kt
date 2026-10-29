@@ -17,10 +17,10 @@ class DefaultStoreRepository @Inject constructor() : StoreRepository {
 
     override suspend fun getRecommendableStores(here: GeoPoint?): List<Store> {
         if (here == null || here.distanceTo(DEMO_ORIGIN) <= DEMO_AREA_RADIUS_M) return DEMO_STORES
+        // 위경도를 그대로 더하면 위도가 다른 곳에서 동서 거리가 틀어진다 → 미터 단위로 옮긴다
         return DEMO_STORES.map { store ->
-            val north = store.location.lat - DEMO_ORIGIN.lat
-            val east = store.location.lng - DEMO_ORIGIN.lng
-            store.copy(location = GeoPoint(here.lat + north, here.lng + east))
+            val (northM, eastM) = store.location.northEastFrom(DEMO_ORIGIN)
+            store.copy(location = here.offset(northM, eastM))
         }
     }
 

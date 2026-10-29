@@ -4,6 +4,7 @@ import ai.pleos.playground.vehicle.constant.control.VehicleGear
 import com.wayfit.wayfitpleos.data.di.ApplicationScope
 import com.wayfit.wayfitpleos.data.pleos.PleosVehicle
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ class DefaultVehicleRepository @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope,
 ) : VehicleRepository {
 
+    @Volatile
     override var isAvailable: Boolean = false
         private set
 
@@ -31,16 +33,29 @@ class DefaultVehicleRepository @Inject constructor(
     private val _drivingMinutes = MutableStateFlow<Int?>(null)
     override val drivingMinutes: StateFlow<Int?> = _drivingMinutes.asStateFlow()
 
+    /** 싱글톤이라 Activity 가 다시 만들어져 start() 가 또 불려도 구독이 쌓이지 않게 보관·취소한다 */
+    private var subscription: Job? = null
+
+    @Synchronized
     override fun start(): Boolean {
+        subscription?.cancel()
         isAvailable = vehicle.start()
         if (isAvailable) {
-            scope.launch { vehicle.gear.filterNotNull().collect { _parked.value = it == VehicleGear.GEAR_PARK } }
-            scope.launch { vehicle.tripDrivingTime.filterNotNull().collect { _drivingMinutes.value = it } }
+            subscription = scope.launch {
+                launch { vehicle.gear.filterNotNull().collect { _parked.value = it == VehicleGear.GEAR_PARK } }
+                launch { vehicle.tripDrivingTime.filterNotNull().collect { _drivingMinutes.value = it } }
+            }
         }
         return isAvailable
     }
 
-    override fun stop() = vehicle.stop()
+    @Synchronized
+    override fun stop() {
+        subscription?.cancel()
+        subscription = null
+        vehicle.stop()
+        isAvailable = false
+    }
 
     override fun demoSetParked(parked: Boolean) {
         _parked.value = parked

@@ -30,11 +30,12 @@ class PleosVoice @Inject constructor(@ApplicationContext context: Context) {
     private val appContext = context.applicationContext
     private val tts by lazy { TextToSpeech(appContext, TtsMode.HYBRID) }
     private val stt by lazy { SpeechToText(appContext, SttMode.HYBRID) }
-    private var ttsReady = false
-    private var sttReady = false
+    // 초기화(IO 스레드)·호출(메인)·SDK 콜백(바인더 스레드)이 함께 읽고 쓰므로 가시성 보장
+    @Volatile private var ttsReady = false
+    @Volatile private var sttReady = false
 
-    private var speakDone: CompletableDeferred<Unit>? = null
-    private var heard: CompletableDeferred<String?>? = null
+    @Volatile private var speakDone: CompletableDeferred<Unit>? = null
+    @Volatile private var heard: CompletableDeferred<String?>? = null
 
     private val ttsEvents = object : EventListener {
         override fun onStart() = Unit
@@ -111,7 +112,13 @@ class PleosVoice @Inject constructor(@ApplicationContext context: Context) {
             Log.w(TAG, "speak failed", it)
             return
         }
-        withTimeoutOrNull(timeoutMs) { done.await() }
+        var finished = false
+        try {
+            finished = withTimeoutOrNull(timeoutMs) { done.await() } != null
+        } finally {
+            // 시간 초과·코루틴 취소(사용자가 버튼을 누름 등) 때도 읽기를 멈춘다
+            if (!finished) runCatching { tts.stop() }
+        }
     }
 
     fun stopSpeaking() {
@@ -127,7 +134,10 @@ class PleosVoice @Inject constructor(@ApplicationContext context: Context) {
             Log.w(TAG, "listen failed", it)
             return null
         }
-        return withTimeoutOrNull(timeoutMs) { result.await() }.also {
+        try {
+            return withTimeoutOrNull(timeoutMs) { result.await() }
+        } finally {
+            // 코루틴이 취소돼도 마이크는 반드시 닫는다 (Spec NFR-A7)
             runCatching { stt.stop() }
         }
     }

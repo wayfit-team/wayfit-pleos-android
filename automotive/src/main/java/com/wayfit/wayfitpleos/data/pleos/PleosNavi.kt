@@ -31,7 +31,7 @@ class PleosNavi @Inject constructor(@ApplicationContext context: Context) : Navi
 
     private val appContext = context.applicationContext
     private val helper by lazy { NaviHelper(appContext) }
-    private var started = false
+    @Volatile private var started = false
 
     private val _location = MutableStateFlow<CurrentLocationInfo?>(null)
     val location: StateFlow<CurrentLocationInfo?> = _location.asStateFlow()

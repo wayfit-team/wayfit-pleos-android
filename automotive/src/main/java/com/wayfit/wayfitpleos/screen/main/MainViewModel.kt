@@ -14,6 +14,7 @@ import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import com.wayfit.wayfitpleos.model.SdkStatus
 import com.wayfit.wayfitpleos.model.TripPolicy
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
+import com.wayfit.wayfitpleos.screen.base.Event
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.combine
@@ -32,7 +33,7 @@ class MainViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
     private val demoRepository: DemoRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
-) : BaseViewModel<MainState, MainEvent>() {
+) : BaseViewModel<MainState, Event>() {
 
     override fun getInitialState(): MainState = MainState()
 
@@ -44,13 +45,17 @@ class MainViewModel @Inject constructor(
                 vehicleRepository.parked,
                 vehicleRepository.drivingMinutes,
                 couponRepository.coupons,
-            ) { parked, minutes, coupons ->
-                stateFlow.value.copy(
-                    parked = parked == true,
-                    longDrive = (minutes ?: 0) >= TripPolicy.LONG_DRIVE_MINUTES,
-                    activeCouponCount = coupons.count { !it.redeemed },
-                )
-            }.collect(::setState)
+            ) { parked, minutes, coupons -> Triple(parked, minutes, coupons) }
+                .collect { (parked, minutes, coupons) ->
+                    // sdk 필드는 startSdks 가 따로 채우므로 덮어쓰지 않게 원자적으로 갱신
+                    updateState {
+                        it.copy(
+                            parked = parked == true,
+                            longDrive = (minutes ?: 0) >= TripPolicy.LONG_DRIVE_MINUTES,
+                            activeCouponCount = coupons.count { c -> !c.redeemed },
+                        )
+                    }
+                }
         }
     }
 
@@ -73,7 +78,7 @@ class MainViewModel @Inject constructor(
                 )
             }
             Log.i(TAG, "SDK status: $sdk")
-            setState(stateFlow.value.copy(sdk = sdk))
+            updateState { it.copy(sdk = sdk) }
         }
     }
 

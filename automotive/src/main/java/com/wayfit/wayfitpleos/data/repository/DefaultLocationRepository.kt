@@ -19,6 +19,7 @@ class DefaultLocationRepository @Inject constructor(
     @ApplicationScope scope: CoroutineScope,
 ) : LocationRepository {
 
+    @Volatile
     override var isAvailable: Boolean = false
         private set
 
@@ -31,7 +32,10 @@ class DefaultLocationRepository @Inject constructor(
     override fun start(permissionGranted: Boolean): Boolean =
         (permissionGranted && fused.start()).also { isAvailable = it }
 
-    override fun stop() = fused.stop()
+    override fun stop() {
+        fused.stop()
+        isAvailable = false
+    }
 
     override fun watch(store: Store): Boolean = fused.watchGeofence(store.location, store.radiusM)
 

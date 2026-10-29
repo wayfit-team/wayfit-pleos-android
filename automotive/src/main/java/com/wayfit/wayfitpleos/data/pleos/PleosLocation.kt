@@ -30,8 +30,8 @@ class PleosLocation @Inject constructor(@ApplicationContext context: Context) {
 
     private val appContext = context.applicationContext
     private val fused by lazy { FusedLocation(appContext) }
-    private var started = false
-    private var alertId: String? = null
+    @Volatile private var started = false
+    @Volatile private var alertId: String? = null
 
     private val _location = MutableStateFlow<LocationData?>(null)
     val location: StateFlow<LocationData?> = _location.asStateFlow()

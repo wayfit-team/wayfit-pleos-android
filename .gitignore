@@ -12,12 +12,9 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 .kotlin/
 /.idea/copilot*.xml
 /.idea/deviceManager.xml
 /.idea/deploymentTargetSelector.xml
 /.idea/appInsightsSettings.xml
 
-# 로컬 빌드 설정·Pleos 키 (템플릿: gradle.properties.example)
-gradle.properties

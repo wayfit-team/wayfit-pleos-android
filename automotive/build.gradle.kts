@@ -9,8 +9,8 @@ plugins {
     alias(libs.plugins.android.junit5)
 }
 
-// Pleos Playground 키는 레포에 올리지 않는다.
-// local.properties(gitignore) → ~/.gradle/gradle.properties 순으로 읽는다. 프로젝트 gradle.properties 에 넣지 말 것
+// Pleos Playground 키는 레포에 올리지 않는다 → local.properties(gitignore)에 둔다.
+// (CI 등에서는 ~/.gradle/gradle.properties 나 -P 로도 줄 수 있다. 프로젝트 gradle.properties 는 git 에 올라가므로 넣지 말 것)
 val localProps = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use(::load)

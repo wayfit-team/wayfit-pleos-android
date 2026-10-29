@@ -4,13 +4,9 @@ import androidx.lifecycle.viewModelScope
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
 import com.wayfit.wayfitpleos.model.PairedPhone
-import com.wayfit.wayfitpleos.model.Pairing
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterNot
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,12 +18,11 @@ class SettingsViewModel @Inject constructor(
 
     override fun getInitialState(): SettingsState = SettingsState()
 
-    override fun fetchData(): Job = viewModelScope.launch {
-        // 코드 표시(Showing) 중에는 목록을 바꾸지 않는다
-        val phones = pairingRepository.pairing
-            .filterNot { it is Pairing.Showing }
-            .map { (it as? Pairing.Paired)?.phones.orEmpty() }
-        combine(phones, settingsRepository.voiceGuideEnabled, ::SettingsState).collect(::setState)
+    init {
+        // 연결된 폰 목록은 코드 발급 세션과 분리된 스트림이라 항상 값이 있다
+        viewModelScope.launch {
+            combine(pairingRepository.phones, settingsRepository.voiceGuideEnabled, ::SettingsState).collect(::setState)
+        }
     }
 
     fun disconnect(phone: PairedPhone) {

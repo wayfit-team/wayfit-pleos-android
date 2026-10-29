@@ -68,6 +68,37 @@ internal class DefaultVehicleRepositoryTest {
     }
 
     @Test
+    fun `stop 하면 SDK 구독을 끊고 사용 불가로 바뀐다 (리뷰 1-4)`() {
+        val sut = DefaultVehicleRepository(pleosVehicle(started = true), scope)
+        sut.start()
+        scope.runCurrent()
+
+        sut.stop()
+        gear.value = VehicleGear.GEAR_PARK
+        scope.runCurrent()
+
+        assertFalse(sut.isAvailable)
+        assertNull(sut.parked.value)
+    }
+
+    @Test
+    fun `start 를 다시 불러도 이전 구독은 정리되고 하나만 동작한다 (리뷰 1-4)`() {
+        val sut = DefaultVehicleRepository(pleosVehicle(started = true), scope)
+        sut.start()
+        sut.start()
+        scope.runCurrent()
+
+        gear.value = VehicleGear.GEAR_PARK
+        scope.runCurrent()
+        assertEquals(true, sut.parked.value)
+
+        sut.stop()
+        gear.value = VehicleGear.GEAR_DRIVE
+        scope.runCurrent()
+        assertEquals(true, sut.parked.value) // 첫 start 의 구독이 남아 있었다면 false 로 바뀌었을 것
+    }
+
+    @Test
     fun `DEMO 조작은 SDK 없이도 상태를 바꾼다`() {
         val sut = DefaultVehicleRepository(pleosVehicle(started = false), scope)
 

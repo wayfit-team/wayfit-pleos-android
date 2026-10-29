@@ -47,8 +47,9 @@ import com.wayfit.wayfitpleos.widget.SecondaryButton
 import com.wayfit.wayfitpleos.widget.SectionLabel
 import com.wayfit.wayfitpleos.widget.Text
 import com.wayfit.wayfitpleos.widget.WayfitCard
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** 연결 해제 확인 대상: 폰 한 대 또는 전체(null) */
@@ -66,7 +67,6 @@ fun SettingsScreen(
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
     var confirm by remember { mutableStateOf<DisconnectTarget?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.fetchData() }
     LaunchedEffect(Unit) {
         viewModel.eventFlow.collect { event ->
             when (event) {
@@ -250,4 +250,6 @@ private fun DisconnectDialog(target: DisconnectTarget, onConfirm: () -> Unit, on
     )
 }
 
-private fun formatTime(millis: Long): String = SimpleDateFormat("M월 d일 HH:mm", Locale.KOREA).format(Date(millis))
+private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREA)
+
+private fun formatTime(millis: Long): String = TIME_FORMAT.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))

@@ -25,6 +25,14 @@ internal class GeoPointTest {
     }
 
     @Test
+    fun `northEastFrom 은 offset 의 역`() {
+        val moved = ajou.offset(northM = 250.0, eastM = -400.0)
+        val (north, east) = moved.northEastFrom(ajou)
+        assertEquals(250.0, north, 0.5)
+        assertEquals(-400.0, east, 0.5)
+    }
+
+    @Test
     fun `offset 으로 옮긴 거리만큼 떨어진다`() {
         assertEquals(700.0, ajou.distanceTo(ajou.offset(northM = 700.0, eastM = 0.0)), 1.0)
         assertEquals(500.0, ajou.distanceTo(ajou.offset(northM = 300.0, eastM = 400.0)), 1.0)

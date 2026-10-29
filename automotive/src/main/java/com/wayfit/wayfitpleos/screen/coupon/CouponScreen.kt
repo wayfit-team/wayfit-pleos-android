@@ -19,14 +19,12 @@ import androidx.compose.material.icons.rounded.PhoneIphone
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.wayfit.wayfitpleos.model.Pairing
 import com.wayfit.wayfitpleos.ui.theme.WayfitColor
 import com.wayfit.wayfitpleos.ui.theme.WayfitSize
 import com.wayfit.wayfitpleos.ui.theme.WayfitSpace
@@ -44,7 +42,6 @@ fun CouponScreen(
     onOpenPairing: () -> Unit,
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.fetchData() }
 
     val (active, used) = state.coupons.partition { !it.redeemed }
 
@@ -67,15 +64,14 @@ fun CouponScreen(
                     SectionLabel("쿠폰함")
                     Text("받은 쿠폰 ${active.size}장", style = MaterialTheme.typography.headlineLarge)
                 }
-                val pairing = state.pairing
-                if (pairing is Pairing.Paired) {
-                    StatusChip("폰 ${pairing.phoneCount}대 연결됨", WayfitColor.Brand, icon = Icons.Rounded.CheckCircle)
+                if (state.phoneCount > 0) {
+                    StatusChip("폰 ${state.phoneCount}대 연결됨", WayfitColor.Brand, icon = Icons.Rounded.CheckCircle)
                 } else {
                     StatusChip("폰 미연결", WayfitColor.Amber, icon = Icons.Rounded.PhoneIphone)
                 }
             }
         }
-        if (state.pairing !is Pairing.Paired) {
+        if (state.phoneCount == 0) {
             item {
                 WayfitCard(Modifier.fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(WayfitSpace.L), verticalAlignment = Alignment.CenterVertically) {

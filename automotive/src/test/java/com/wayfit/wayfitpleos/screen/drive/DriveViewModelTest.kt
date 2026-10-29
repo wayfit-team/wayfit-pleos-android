@@ -1,6 +1,10 @@
 package com.wayfit.wayfitpleos.screen.drive
 
 import com.wayfit.wayfitpleos.data.repository.CouponRepository
+import com.wayfit.wayfitpleos.domain.CurrentLocation
+import com.wayfit.wayfitpleos.domain.RecommendStoreUseCase
+import com.wayfit.wayfitpleos.domain.VisitUseCase
+import com.wayfit.wayfitpleos.domain.VoiceRecommendation
 import com.wayfit.wayfitpleos.data.repository.DemoCommand
 import com.wayfit.wayfitpleos.data.repository.DemoRepository
 import com.wayfit.wayfitpleos.data.repository.DefaultStoreRepository
@@ -13,7 +17,7 @@ import com.wayfit.wayfitpleos.data.repository.VehicleRepository
 import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import com.wayfit.wayfitpleos.model.Coupon
 import com.wayfit.wayfitpleos.model.GeoPoint
-import com.wayfit.wayfitpleos.model.Pairing
+import com.wayfit.wayfitpleos.model.PairedPhone
 import com.wayfit.wayfitpleos.model.RouteSummary
 import com.wayfit.wayfitpleos.model.Store
 import com.wayfit.wayfitpleos.model.TripPolicy
@@ -53,7 +57,7 @@ internal class DriveViewModelTest : JUnit5Test() {
     private val geofenceEntered = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val waypointArrived = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val naviRoute = MutableStateFlow<RouteSummary?>(null)
-    private val pairing = MutableStateFlow<Pairing>(Pairing.NotPaired)
+    private val phones = MutableStateFlow<List<PairedPhone>>(emptyList())
     private val voiceGuide = MutableStateFlow(true)
 
     private lateinit var vehicleRepository: VehicleRepository
@@ -73,6 +77,8 @@ internal class DriveViewModelTest : JUnit5Test() {
         super.setup()
         vehicleRepository = mockk(relaxed = true) {
             every { parked } returns this@DriveViewModelTest.parked
+            // 실제 구현처럼 DEMO 주차도 parked 스트림을 바꾼다
+            every { demoSetParked(any()) } answers { this@DriveViewModelTest.parked.value = firstArg() }
             every { drivingMinutes } returns this@DriveViewModelTest.drivingMinutes
             every { doorOpened } returns emptyFlow()
         }
@@ -96,12 +102,16 @@ internal class DriveViewModelTest : JUnit5Test() {
         couponRepository = mockk {
             coEvery { issue(any()) } answers { coupon(firstArg()) }
         }
-        pairingRepository = mockk(relaxed = true) { every { pairing } returns this@DriveViewModelTest.pairing }
+        pairingRepository = mockk(relaxed = true) { every { phones } returns this@DriveViewModelTest.phones }
         settingsRepository = mockk(relaxed = true) { every { voiceGuideEnabled } returns voiceGuide }
 
+        val currentLocation = CurrentLocation(locationRepository, naviRepository)
         sut = DriveViewModel(
-            vehicleRepository, naviRepository, locationRepository, voiceRepository,
-            storeRepository, couponRepository, pairingRepository, settingsRepository, demoRepository,
+            recommendStore = RecommendStoreUseCase(storeRepository, vehicleRepository, currentLocation),
+            visit = VisitUseCase(naviRepository, locationRepository, vehicleRepository, couponRepository, pairingRepository, currentLocation),
+            voice = VoiceRecommendation(voiceRepository, settingsRepository),
+            naviRepository = naviRepository,
+            demoRepository = demoRepository,
         )
         testScope.runCurrent() // init 의 collector 들이 구독을 시작하도록
     }
@@ -325,7 +335,7 @@ internal class DriveViewModelTest : JUnit5Test() {
 
     @Test
     fun `폰이 연결돼 있으면 쿠폰 도착 화면에 표시한다`() {
-        pairing.value = Pairing.Paired(emptyList())
+        phones.value = listOf(PairedPhone("p1", "Galaxy S25", 0L))
         recommendAndAccept()
         geofenceEntered.tryEmit(Unit)
         parked.value = true
@@ -361,5 +371,7 @@ internal class DriveViewModelTest : JUnit5Test() {
 
         assertInstanceOf(DriveState.Verified::class.java, sut.stateFlow.value)
         verify { vehicleRepository.demoSetParked(true) }
+        // P단 스트림 한 경로로만 인증 → 쿠폰은 한 장 (리뷰: onParked 중복 호출)
+        coVerify(exactly = 1) { couponRepository.issue(any()) }
     }
 }
