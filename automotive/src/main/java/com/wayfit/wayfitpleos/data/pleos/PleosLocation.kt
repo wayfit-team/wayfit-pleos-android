@@ -8,6 +8,9 @@ import ai.pleos.playground.location.fused.model.ProximityAlertEvent
 import ai.pleos.playground.location.fused.model.ProximityAlertRequest
 import ai.pleos.playground.location.fused.model.ProximityTransition
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import android.util.Log
 import com.wayfit.wayfitpleos.model.GeoPoint
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -22,12 +25,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * 매장 반경 근접 알림(지오펜스)으로 방문 인증 증거를 만든다.
  * 런타임 권한 pleos.car.permission.FUSED_LOCATION 허용 후 start() 해야 한다.
  */
-class PleosLocation(context: Context) {
+@Singleton
+class PleosLocation @Inject constructor(@ApplicationContext context: Context) {
 
     private val appContext = context.applicationContext
     private val fused by lazy { FusedLocation(appContext) }
-    private var started = false
-    private var alertId: String? = null
+    @Volatile private var started = false
+    @Volatile private var alertId: String? = null
 
     private val _location = MutableStateFlow<LocationData?>(null)
     val location: StateFlow<LocationData?> = _location.asStateFlow()

@@ -10,6 +10,9 @@ import ai.pleos.playground.navi.data.WaypointArrivedInfo
 import ai.pleos.playground.navi.helper.NaviHelper
 import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import android.util.Log
 import com.wayfit.wayfitpleos.model.GeoPoint
 import com.wayfit.wayfitpleos.model.Store
@@ -23,11 +26,12 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * NaviHelper SDK 래퍼. 조회 API(getXxx)는 결과를 리스너 콜백(onXxx)으로 돌려준다.
  */
-class PleosNavi(context: Context) : NaviHelperEventListener {
+@Singleton
+class PleosNavi @Inject constructor(@ApplicationContext context: Context) : NaviHelperEventListener {
 
     private val appContext = context.applicationContext
     private val helper by lazy { NaviHelper(appContext) }
-    private var started = false
+    @Volatile private var started = false
 
     private val _location = MutableStateFlow<CurrentLocationInfo?>(null)
     val location: StateFlow<CurrentLocationInfo?> = _location.asStateFlow()

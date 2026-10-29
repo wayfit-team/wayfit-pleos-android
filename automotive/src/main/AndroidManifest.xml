@@ -19,6 +19,7 @@
     <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
 
     <application
+        android:name=".screen.WayfitApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -27,7 +28,7 @@
         android:theme="@style/Theme.WayfitPleosAndroid">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".screen.main.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

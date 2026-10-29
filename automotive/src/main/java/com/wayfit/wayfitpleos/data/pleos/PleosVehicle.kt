@@ -8,6 +8,9 @@ import ai.pleos.playground.vehicle.listener.DoorPositionListener
 import ai.pleos.playground.vehicle.listener.DrivingTimeListener
 import ai.pleos.playground.vehicle.listener.GearSelectionListener
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,12 +25,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * - 문: 운전석·조수석 문이 열리면 하차 증거
  * - 주행 시간: 장시간 운전 추천 우선순위용
  */
-class PleosVehicle(context: Context) {
+@Singleton
+class PleosVehicle @Inject constructor(@ApplicationContext context: Context) {
 
     private val appContext = context.applicationContext
     // 비 Pleos 기기에서는 생성 자체가 실패할 수 있어 start() 안에서 처음 만든다
     private val vehicle by lazy { Vehicle(appContext) }
-    private var started = false
+    @Volatile private var started = false
 
     private val _gear = MutableStateFlow<VehicleGear?>(null)
     val gear: StateFlow<VehicleGear?> = _gear.asStateFlow()
