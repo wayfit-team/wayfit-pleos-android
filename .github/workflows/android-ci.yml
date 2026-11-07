@@ -6,6 +6,8 @@ on:
   pull_request:
   push:
     branches: [develop, master]
+  # push·PR 이벤트로 실행이 안 생길 때 Actions 탭에서 직접 돌릴 수 있게
+  workflow_dispatch:
 
 concurrency:
   group: android-ci-${{ github.ref }}
