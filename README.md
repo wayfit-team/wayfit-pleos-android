@@ -40,7 +40,7 @@ pleos.clientSecret=<클라이언트 시크릿>
 - 첫 실행 때 `POST /v1/devices`로 기기를 등록하고, 받은 기기 토큰을 앱 전용 저장소에 둔다. 이후 요청에는 `DeviceAuthInterceptor`가 `Authorization: Bearer`를 붙인다. 401을 받으면 한 번 다시 등록한다.
 - 로컬 서버(`wrangler dev`)에 붙일 때는 `local.properties`에 `wayfit.apiBaseUrl=http://10.0.2.2:8787/`를 넣는다. debug 빌드만 localhost·10.0.2.2로 http를 쓸 수 있다.
 - 데모 매장은 아주대 → 광교호수공원 경로에 있다. 차량 위치가 3km 넘게 떨어져 있으면(에뮬레이터) 매장을 차량 주변으로 옮겨 보여준다. 방문 증거 좌표는 서버 좌표로 바꿔서 보낸다.
-- 차량 쪽 폰 연결 해제 API가 없어서, 연결 해제는 폰(PWA)에서 한다.
+- 연결된 폰은 `GET /v1/devices/me/phones`로 받고, 설정 화면에서 한 대씩 또는 모두 해제할 수 있다(`DELETE /v1/devices/me/phones[/{id}]`). 폰(PWA)에서도 해제할 수 있다.
 - API 점검: `python3 scripts/api_e2e.py`로 앱과 같은 순서(기기 등록 → 매장 → 방문 → 인증 → 쿠폰 → 페어링)로 서버를 호출해 본다. 다른 서버는 `WAYFIT_API=http://localhost:8787`로 지정한다. 실제 서버에 테스트 기록이 남으므로 CI에서는 수동 실행(Actions → API E2E)으로만 둔다.
 
 ## 사용 SDK

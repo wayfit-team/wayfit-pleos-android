@@ -1,9 +1,6 @@
 package com.wayfit.wayfitpleos.model
 
-/**
- * 연결된 폰 (영속 상태). 서버는 차량 쪽에 연결된 폰 수만 알려 주므로
- * 이름·연결 시각이 없을 수 있다.
- */
+/** 연결된 폰 (영속 상태). 서버는 폰 이름을 주지 않아 연결 순서로 "휴대폰 N" 이라 부른다 */
 data class PairedPhone(
     val id: String,
     val name: String,

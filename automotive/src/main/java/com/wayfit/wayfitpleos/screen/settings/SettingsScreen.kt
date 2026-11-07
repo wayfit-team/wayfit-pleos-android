@@ -16,14 +16,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.PhoneIphone
 import androidx.compose.material.icons.rounded.RecordVoiceOver
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,6 +52,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/** 연결 해제 확인 대상: 폰 한 대 또는 전체(null) */
+private sealed interface DisconnectTarget {
+    data class One(val phone: PairedPhone) : DisconnectTarget
+    data object All : DisconnectTarget
+}
 
 @Composable
 fun SettingsScreen(
@@ -54,6 +65,7 @@ fun SettingsScreen(
     onShowSnackbar: (String) -> Unit,
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
+    var confirm by remember { mutableStateOf<DisconnectTarget?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.eventFlow.collect { event ->
@@ -77,10 +89,24 @@ fun SettingsScreen(
                     Text("웨이핏 설정", style = MaterialTheme.typography.headlineLarge)
                 }
             }
-            item { PhonesSection(state.phones, onOpenPairing) }
+            item { PhonesSection(state.phones, onOpenPairing, onDisconnect = { confirm = it }) }
             item { VoiceSection(state.voiceGuideEnabled, viewModel::setVoiceGuideEnabled) }
             item { AppInfoSection() }
         }
+    }
+
+    confirm?.let { target ->
+        DisconnectDialog(
+            target = target,
+            onConfirm = {
+                when (target) {
+                    is DisconnectTarget.One -> viewModel.disconnect(target.phone)
+                    DisconnectTarget.All -> viewModel.disconnectAll()
+                }
+                confirm = null
+            },
+            onDismiss = { confirm = null },
+        )
     }
 }
 
@@ -88,16 +114,24 @@ fun SettingsScreen(
 private fun PhonesSection(
     phones: List<PairedPhone>,
     onOpenPairing: () -> Unit,
+    onDisconnect: (DisconnectTarget) -> Unit,
 ) {
     WayfitCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(WayfitSpace.M)) {
-            Column {
-                Text("연결된 폰", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "쿠폰은 연결된 폰의 쿠폰함으로도 들어가요",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = WayfitColor.TextSecondary,
-                )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("연결된 폰", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "쿠폰은 연결된 폰의 쿠폰함으로도 들어가요",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = WayfitColor.TextSecondary,
+                    )
+                }
+                if (phones.size > 1) {
+                    TextButton(onClick = { onDisconnect(DisconnectTarget.All) }) {
+                        Text("모두 해제", style = MaterialTheme.typography.labelMedium, color = WayfitColor.Rose)
+                    }
+                }
             }
             if (phones.isEmpty()) {
                 Row(
@@ -113,13 +147,7 @@ private fun PhonesSection(
                     PrimaryButton("폰 연결하기", onOpenPairing, icon = Icons.Rounded.PhoneIphone)
                 }
             } else {
-                phones.forEach { phone -> PhoneRow(phone) }
-                // 차량 쪽 연결 해제 API 가 없어 폰(웨이핏 웹)에서 해제한다
-                Text(
-                    "연결 해제는 폰의 웨이핏에서 할 수 있어요",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = WayfitColor.TextTertiary,
-                )
+                phones.forEach { phone -> PhoneRow(phone, onDisconnect = { onDisconnect(DisconnectTarget.One(phone)) }) }
                 SecondaryButton("다른 폰 연결", onOpenPairing, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
             }
         }
@@ -127,7 +155,7 @@ private fun PhonesSection(
 }
 
 @Composable
-private fun PhoneRow(phone: PairedPhone) {
+private fun PhoneRow(phone: PairedPhone, onDisconnect: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -148,6 +176,7 @@ private fun PhoneRow(phone: PairedPhone) {
                 )
             }
         }
+        SecondaryButton("연결 해제", onDisconnect, icon = Icons.Rounded.LinkOff)
     }
 }
 
@@ -196,6 +225,32 @@ private fun AppInfoSection() {
     }
 }
 
+@Composable
+private fun DisconnectDialog(target: DisconnectTarget, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val (title, body) = when (target) {
+        is DisconnectTarget.One -> "${target.phone.name} 연결을 해제할까요?" to
+            "해제하면 이 폰으로는 새 쿠폰을 받을 수 없어요. 이미 받은 쿠폰은 차량 쿠폰함에 남아 있어요."
+        DisconnectTarget.All -> "모든 폰 연결을 해제할까요?" to
+            "다시 쓰려면 폰 연결에서 QR을 새로 찍어야 해요. 받은 쿠폰은 차량 쿠폰함에 남아 있어요."
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = WayfitColor.SurfaceRaised,
+        shape = WayfitShape.Card,
+        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+        text = { Text(body, style = MaterialTheme.typography.bodyLarge, color = WayfitColor.TextSecondary) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("연결 해제", style = MaterialTheme.typography.labelLarge, color = WayfitColor.Rose)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("취소", style = MaterialTheme.typography.labelLarge, color = WayfitColor.TextSecondary)
+            }
+        },
+    )
+}
 
 private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREA)
 

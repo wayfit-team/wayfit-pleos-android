@@ -1,8 +1,10 @@
 package com.wayfit.wayfitpleos.screen.settings
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
+import com.wayfit.wayfitpleos.model.PairedPhone
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -23,15 +25,33 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             combine(pairingRepository.phones, settingsRepository.voiceGuideEnabled, ::SettingsState).collect(::setState)
         }
-        viewModelScope.launch {
-            try {
-                pairingRepository.refreshPhones()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                sendEvent(SettingsEvent.ShowMessage("연결된 폰을 불러오지 못했어요"))
-            }
-        }
+        launchReporting("연결된 폰을 불러오지 못했어요") { pairingRepository.refreshPhones() }
+    }
+
+    fun disconnect(phone: PairedPhone) = launchReporting("${phone.name} 연결을 해제하지 못했어요") {
+        pairingRepository.disconnect(phone.id)
+        sendEvent(SettingsEvent.ShowMessage("${phone.name} 연결을 해제했어요"))
+    }
+
+    fun disconnectAll() = launchReporting("연결을 해제하지 못했어요") {
+        pairingRepository.disconnectAll()
+        sendEvent(SettingsEvent.ShowMessage("모든 폰 연결을 해제했어요"))
     }
 
     fun setVoiceGuideEnabled(enabled: Boolean) = settingsRepository.setVoiceGuideEnabled(enabled)
+
+    /** 서버 요청이 실패하면 [failMessage] 를 띄운다 */
+    private fun launchReporting(failMessage: String, block: suspend () -> Unit) = viewModelScope.launch {
+        try {
+            block()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, failMessage, e)
+            sendEvent(SettingsEvent.ShowMessage(failMessage))
+        }
+    }
+
+    private companion object {
+        const val TAG = "SettingsViewModel"
+    }
 }
