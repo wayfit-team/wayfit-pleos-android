@@ -2,6 +2,7 @@ package com.wayfit.wayfitpleos.data.repository
 
 import com.wayfit.wayfitpleos.model.PairingCode
 import com.wayfit.wayfitpleos.testbase.Fixtures
+import io.mockk.coVerify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -81,6 +82,61 @@ internal class DefaultPairingRepositoryTest {
         sut.refreshPhones()
 
         assertNotNull(sut.code.value)
+    }
+
+    @Test
+    fun `서버의 연결 시각을 그대로 보여준다`() = runTest {
+        server.linked = 1
+        sut.refreshPhones()
+
+        assertEquals(java.time.Instant.parse("2026-11-07T10:00:00Z").toEpochMilli(), sut.phones.value.single().connectedAtMillis)
+    }
+
+    @Test
+    fun `한 대를 해제하면 서버에서 지우고 나머지는 남는다`() = runTest {
+        server.linked = 2
+        sut.refreshPhones()
+        val first = sut.phones.value.first()
+
+        sut.disconnect(first.id)
+
+        coVerify { server.api.unlinkPhone(first.id) }
+        assertEquals(listOf("phn_2"), server.phones.map { it.phoneId })
+        assertEquals(listOf("휴대폰 1"), sut.phones.value.map { it.name })
+        assertTrue(sut.phones.value.none { it.id == first.id })
+    }
+
+    @Test
+    fun `폰에서 먼저 해제해 서버에 없으면(404) 목록에서만 지운다`() = runTest {
+        server.linked = 1
+        sut.refreshPhones()
+        server.linked = 0 // 폰(PWA)에서 해제됨
+
+        sut.disconnect(sut.phones.value.single().id)
+
+        assertEquals(emptyList<Any>(), sut.phones.value)
+    }
+
+    @Test
+    fun `모두 해제`() = runTest {
+        server.linked = 3
+        sut.refreshPhones()
+        sut.demoPhonePaired()
+
+        sut.disconnectAll()
+
+        coVerify { server.api.unlinkAllPhones() }
+        assertEquals(emptyList<Any>(), sut.phones.value)
+    }
+
+    @Test
+    fun `DEMO 폰은 서버를 부르지 않고 해제한다`() = runTest {
+        sut.demoPhonePaired()
+
+        sut.disconnect(sut.phones.value.single().id)
+
+        coVerify(exactly = 0) { server.api.unlinkPhone(any()) }
+        assertEquals(emptyList<Any>(), sut.phones.value)
     }
 
     @Test

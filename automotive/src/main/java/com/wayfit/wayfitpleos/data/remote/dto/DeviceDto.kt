@@ -15,7 +15,14 @@ data class CreatePairingCodeResponse(
 )
 
 @Serializable
-data class DevicePairingStatusResponse(val deviceId: String, val linkedUserCount: Int)
+data class DevicePhonesResponse(val phones: List<LinkedPhoneDto>)
+
+@Serializable
+data class LinkedPhoneDto(
+    /** 연결 해제에 쓰는 ID (phn_…). 카카오 회원번호는 차에 내려오지 않는다 */
+    val phoneId: String,
+    val linkedAt: String,
+)
 
 @Serializable
 data class ErrorResponse(val error: ErrorDetail)

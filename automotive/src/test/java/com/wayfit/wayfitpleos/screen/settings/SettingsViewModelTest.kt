@@ -62,13 +62,61 @@ internal class SettingsViewModelTest : JUnit5Test() {
 
     @Test
     fun `폰 목록을 못 불러오면 안내한다`() {
-        coEvery { server.api.pairingStatus() } throws IOException("offline")
+        coEvery { server.api.phones() } throws IOException("offline")
         val sut = SettingsViewModel(pairingRepository, settingsRepository)
         val events = mutableListOf<SettingsEvent>()
         testScope.backgroundScope.launch { sut.eventFlow.collect(events::add) }
         testScope.runCurrent()
 
         assertEquals(listOf(SettingsEvent.ShowMessage("연결된 폰을 불러오지 못했어요")), events)
+    }
+
+    private fun collectEvents(sut: SettingsViewModel): List<SettingsEvent> {
+        val events = mutableListOf<SettingsEvent>()
+        testScope.backgroundScope.launch { sut.eventFlow.collect(events::add) }
+        testScope.runCurrent()
+        return events
+    }
+
+    @Test
+    fun `폰 한 대 연결 해제 후 안내 메시지`() {
+        server.linked = 2
+        val sut = create()
+        val events = collectEvents(sut)
+
+        sut.disconnect(sut.stateFlow.value.phones.first())
+        testScope.runCurrent()
+
+        assertEquals(listOf("휴대폰 1"), sut.stateFlow.value.phones.map { it.name })
+        assertEquals(1, server.phones.size)
+        assertEquals(listOf(SettingsEvent.ShowMessage("휴대폰 1 연결을 해제했어요")), events)
+    }
+
+    @Test
+    fun `모두 해제 후 안내 메시지`() {
+        server.linked = 2
+        val sut = create()
+        val events = collectEvents(sut)
+
+        sut.disconnectAll()
+        testScope.runCurrent()
+
+        assertEquals(emptyList<Any>(), sut.stateFlow.value.phones)
+        assertEquals(listOf(SettingsEvent.ShowMessage("모든 폰 연결을 해제했어요")), events)
+    }
+
+    @Test
+    fun `해제 요청이 실패하면 목록은 그대로 두고 알린다`() {
+        server.linked = 1
+        coEvery { server.api.unlinkPhone(any()) } throws IOException("offline")
+        val sut = create()
+        val events = collectEvents(sut)
+
+        sut.disconnect(sut.stateFlow.value.phones.single())
+        testScope.runCurrent()
+
+        assertEquals(1, sut.stateFlow.value.phones.size)
+        assertEquals(listOf(SettingsEvent.ShowMessage("휴대폰 1 연결을 해제하지 못했어요")), events)
     }
 
     @Test

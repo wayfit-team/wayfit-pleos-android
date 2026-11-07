@@ -5,7 +5,7 @@ import com.wayfit.wayfitpleos.data.remote.dto.CreateImpressionRequest
 import com.wayfit.wayfitpleos.data.remote.dto.CreateImpressionResponse
 import com.wayfit.wayfitpleos.data.remote.dto.CreatePairingCodeResponse
 import com.wayfit.wayfitpleos.data.remote.dto.CreateVisitRequest
-import com.wayfit.wayfitpleos.data.remote.dto.DevicePairingStatusResponse
+import com.wayfit.wayfitpleos.data.remote.dto.DevicePhonesResponse
 import com.wayfit.wayfitpleos.data.remote.dto.NearbyStoresResponse
 import com.wayfit.wayfitpleos.data.remote.dto.VerifyVisitRequest
 import com.wayfit.wayfitpleos.data.remote.dto.VerifyVisitResponse
@@ -51,6 +51,13 @@ interface WayfitApi {
     @POST("v1/pairing-codes")
     suspend fun createPairingCode(): CreatePairingCodeResponse
 
-    @GET("v1/devices/me/pairing")
-    suspend fun pairingStatus(): DevicePairingStatusResponse
+    @GET("v1/devices/me/phones")
+    suspend fun phones(): DevicePhonesResponse
+
+    /** 이 차에 없는 연결이면 404 */
+    @DELETE("v1/devices/me/phones/{id}")
+    suspend fun unlinkPhone(@Path("id") phoneId: String)
+
+    @DELETE("v1/devices/me/phones")
+    suspend fun unlinkAllPhones()
 }

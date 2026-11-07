@@ -1,6 +1,7 @@
 package com.wayfit.wayfitpleos.data.repository
 
 import com.wayfit.wayfitpleos.data.di.ApplicationScope
+import com.wayfit.wayfitpleos.data.remote.ApiException
 import com.wayfit.wayfitpleos.data.remote.WayfitApi
 import com.wayfit.wayfitpleos.data.remote.apiCall
 import com.wayfit.wayfitpleos.model.PairedPhone
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,9 +30,9 @@ class DefaultPairingRepository @Inject constructor(
     override val code: StateFlow<PairingCode?> = _code.asStateFlow()
 
     private var countdown: Job? = null
-    private var serverCount = 0
-    /** DEMO 버튼으로 붙인 가상 폰 수 (서버에는 없다) */
-    private var demoCount = 0
+    private var serverPhones: List<PairedPhone> = emptyList()
+    /** DEMO 버튼으로 붙인 가상 폰 (서버에는 없다) */
+    private var demoPhones: List<PairedPhone> = emptyList()
 
     override suspend fun requestCode() {
         val response = apiCall { api.createPairingCode() }
@@ -45,24 +47,50 @@ class DefaultPairingRepository @Inject constructor(
     }
 
     override suspend fun refreshPhones() {
-        val count = apiCall { api.pairingStatus() }.linkedUserCount
-        val increased = count > serverCount
-        serverCount = count
+        val phones = apiCall { api.phones() }.phones.map {
+            PairedPhone(id = it.phoneId, name = "", connectedAtMillis = Instant.parse(it.linkedAt).toEpochMilli())
+        }
+        val increased = phones.size > serverPhones.size
+        serverPhones = phones
         publishPhones()
         if (increased) endCode()
     }
 
+    override suspend fun disconnect(phoneId: String) {
+        if (demoPhones.any { it.id == phoneId }) {
+            demoPhones = demoPhones.filterNot { it.id == phoneId }
+        } else {
+            try {
+                apiCall { api.unlinkPhone(phoneId) }
+            } catch (e: ApiException) {
+                // 폰에서 먼저 해제했으면 이미 없다 → 목록에서만 지운다
+                if (e.httpStatus != 404) throw e
+            }
+            serverPhones = serverPhones.filterNot { it.id == phoneId }
+        }
+        publishPhones()
+    }
+
+    override suspend fun disconnectAll() {
+        apiCall { api.unlinkAllPhones() }
+        serverPhones = emptyList()
+        demoPhones = emptyList()
+        publishPhones()
+    }
+
     /** 폰이 코드로 연결되면 그 코드는 끝난다 (1회용) */
     override fun demoPhonePaired() {
-        demoCount++
+        demoPhones = demoPhones + PairedPhone(
+            id = "demo_${System.nanoTime()}",
+            name = "",
+            connectedAtMillis = System.currentTimeMillis(),
+        )
         publishPhones()
         endCode()
     }
 
     private fun publishPhones() {
-        _phones.value = List(serverCount + demoCount) { index ->
-            PairedPhone(id = "phone_${index + 1}", name = "휴대폰 ${index + 1}")
-        }
+        _phones.value = (serverPhones + demoPhones).mapIndexed { index, phone -> phone.copy(name = "휴대폰 ${index + 1}") }
     }
 
     private fun endCode() {
