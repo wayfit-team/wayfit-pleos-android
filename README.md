@@ -1,5 +1,7 @@
 # 웨이핏 (WayFit) — Pleos Connect 차량용 앱
 
+![웨이핏](docs/images/preview.png)
+
 경로 위 동네 가게를 음성으로 추천하고, 들르면 차량 데이터로 방문을 인증해 쿠폰을 주는 앱.
 
 ## 화면 (Pleos Connect v2.1.0 에뮬레이터)
