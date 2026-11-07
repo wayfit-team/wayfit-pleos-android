@@ -7,4 +7,7 @@ data class Coupon(
     val code: String,
     val expiresInDays: Int,
     val redeemed: Boolean = false,
-)
+    val expired: Boolean = false,
+) {
+    val usable: Boolean get() = !redeemed && !expired
+}

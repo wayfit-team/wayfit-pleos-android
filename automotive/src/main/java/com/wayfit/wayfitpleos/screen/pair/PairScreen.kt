@@ -68,7 +68,14 @@ fun PairScreen(
             when {
                 state.justPaired -> PairedContent(state.phoneCount, viewModel::requestNewCode)
                 code != null -> ShowingCode(code, viewModel::requestNewCode)
-                else -> PrimaryButton("연결 코드 받기", viewModel::requestNewCode)
+                state.loading -> Text("연결 코드를 받는 중…", style = MaterialTheme.typography.titleLarge, color = WayfitColor.TextSecondary)
+                else -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(WayfitSpace.L),
+                ) {
+                    state.error?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = WayfitColor.Rose) }
+                    PrimaryButton(if (state.error != null) "다시 시도" else "연결 코드 받기", viewModel::requestNewCode)
+                }
             }
         }
     }
@@ -93,7 +100,7 @@ private fun BackButton(onBack: () -> Unit, modifier: Modifier) {
 private fun ShowingCode(pairing: PairingCode, onNewCode: () -> Unit) {
     val expired = pairing.expired
     Row(horizontalArrangement = Arrangement.spacedBy(WayfitSpace.XL), verticalAlignment = Alignment.CenterVertically) {
-        val qr = remember(pairing.code) { qrBitmap(PairingCode.URL_BASE + pairing.code) }
+        val qr = remember(pairing.url) { qrBitmap(pairing.url) }
         Box(
             modifier = Modifier
                 .size(300.dp)

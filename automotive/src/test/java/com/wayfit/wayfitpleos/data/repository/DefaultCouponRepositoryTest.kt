@@ -1,34 +1,49 @@
 package com.wayfit.wayfitpleos.data.repository
 
+import com.wayfit.wayfitpleos.data.remote.WayfitApi
+import com.wayfit.wayfitpleos.data.remote.dto.CouponDto
+import com.wayfit.wayfitpleos.data.remote.dto.CouponListResponse
+import com.wayfit.wayfitpleos.model.Coupon
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 internal class DefaultCouponRepositoryTest {
 
-    private val sut = DefaultCouponRepository()
-    private val store = DefaultStoreRepository.DEMO_STORES.first()
+    private val api = mockk<WayfitApi>()
+    private val sut = DefaultCouponRepository(api)
+
+    private fun dto(id: String, status: String = "ISSUED") = CouponDto(
+        id = id, storeId = "store_01", storeNameSnapshot = "호수길 로스터리", benefitSnapshot = "아메리카노 1잔",
+        code6 = "482910", status = status,
+        issuedAt = Instant.now().toString(),
+        expiresAt = Instant.now().plus(7, ChronoUnit.DAYS).minusSeconds(60).toString(),
+    )
 
     @Test
-    fun `발급한 쿠폰은 매장 정보를 담아 목록 맨 앞에 들어간다`() = runTest {
-        val before = sut.coupons.value.size
+    fun `서버 쿠폰 목록을 받아 화면 모델로 바꾼다`() = runTest {
+        coEvery { api.coupons() } returns CouponListResponse(listOf(dto("c1"), dto("c2", status = "REDEEMED")))
 
-        val coupon = sut.issue(store)
+        sut.refresh()
 
-        assertEquals(before + 1, sut.coupons.value.size)
-        assertEquals(coupon, sut.coupons.value.first())
-        assertEquals(store.name, coupon.storeName)
-        assertEquals(store.benefit, coupon.benefit)
+        val (first, second) = sut.coupons.value
+        assertEquals(Coupon("c1", "호수길 로스터리", "아메리카노 1잔", "482910", expiresInDays = 7), first)
+        assertEquals(true, second.redeemed)
     }
 
     @Test
-    fun `쿠폰은 6자리 숫자 코드에 7일 유효, 미사용 상태로 발급된다`() = runTest {
-        val coupon = sut.issue(store)
+    fun `인증으로 받은 쿠폰은 맨 앞에 넣고 같은 ID 면 바꿔 끼운다`() = runTest {
+        coEvery { api.coupons() } returns CouponListResponse(listOf(dto("c1"), dto("c2")))
+        sut.refresh()
+        val issued = Coupon("c2", "새 매장", "새 혜택", "111111", expiresInDays = 7)
 
-        assertTrue(coupon.code.matches(Regex("\\d{6}")), coupon.code)
-        assertEquals(7, coupon.expiresInDays)
-        assertFalse(coupon.redeemed)
+        sut.add(issued)
+
+        assertEquals(listOf("c2", "c1"), sut.coupons.value.map { it.id })
+        assertEquals(issued, sut.coupons.value.first())
     }
 }

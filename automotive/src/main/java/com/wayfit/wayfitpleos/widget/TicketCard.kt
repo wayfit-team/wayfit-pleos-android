@@ -53,7 +53,7 @@ private class TicketShape(private val stubWidthPx: Float, private val notchPx: F
 
 @Composable
 fun TicketCard(coupon: Coupon, modifier: Modifier = Modifier, highlighted: Boolean = false) {
-    val dimmed = coupon.redeemed
+    val dimmed = !coupon.usable
     val stubWidth = 168.dp
     val shape = TicketShape(stubWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { stubWidth.toPx() },
         notchPx = with(androidx.compose.ui.platform.LocalDensity.current) { 14.dp.toPx() },
@@ -81,7 +81,8 @@ fun TicketCard(coupon: Coupon, modifier: Modifier = Modifier, highlighted: Boole
             )
             Text(
                 when {
-                    dimmed -> "사용 완료"
+                    coupon.redeemed -> "사용 완료"
+                    coupon.expired -> "기간 만료"
                     coupon.expiresInDays <= 1 -> "오늘까지 사용"
                     else -> "${coupon.expiresInDays}일 남음"
                 },

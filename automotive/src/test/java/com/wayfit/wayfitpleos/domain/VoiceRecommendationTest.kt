@@ -1,9 +1,9 @@
 package com.wayfit.wayfitpleos.domain
 
-import com.wayfit.wayfitpleos.data.repository.DefaultStoreRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
 import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import com.wayfit.wayfitpleos.model.VoiceIntent
+import com.wayfit.wayfitpleos.testbase.Fixtures
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class VoiceRecommendationTest {
 
-    private val store = DefaultStoreRepository.DEMO_STORES.first()
+    private val store = Fixtures.STORE
     private val enabled = MutableStateFlow(true)
     private val voice = mockk<VoiceRepository>(relaxed = true)
     private val settings = mockk<SettingsRepository> { every { voiceGuideEnabled } returns enabled }

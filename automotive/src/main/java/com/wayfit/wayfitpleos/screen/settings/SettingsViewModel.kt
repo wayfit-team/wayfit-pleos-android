@@ -3,9 +3,9 @@ package com.wayfit.wayfitpleos.screen.settings
 import androidx.lifecycle.viewModelScope
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
-import com.wayfit.wayfitpleos.model.PairedPhone
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,16 +23,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             combine(pairingRepository.phones, settingsRepository.voiceGuideEnabled, ::SettingsState).collect(::setState)
         }
-    }
-
-    fun disconnect(phone: PairedPhone) {
-        pairingRepository.disconnect(phone.id)
-        sendEvent(SettingsEvent.ShowMessage("${phone.name} 연결을 해제했어요"))
-    }
-
-    fun disconnectAll() {
-        pairingRepository.disconnectAll()
-        sendEvent(SettingsEvent.ShowMessage("모든 폰 연결을 해제했어요"))
+        viewModelScope.launch {
+            try {
+                pairingRepository.refreshPhones()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                sendEvent(SettingsEvent.ShowMessage("연결된 폰을 불러오지 못했어요"))
+            }
+        }
     }
 
     fun setVoiceGuideEnabled(enabled: Boolean) = settingsRepository.setVoiceGuideEnabled(enabled)

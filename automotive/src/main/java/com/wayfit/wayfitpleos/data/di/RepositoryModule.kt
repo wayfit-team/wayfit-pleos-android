@@ -9,12 +9,14 @@ import com.wayfit.wayfitpleos.data.repository.DefaultSettingsRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
 import com.wayfit.wayfitpleos.data.repository.DefaultStoreRepository
 import com.wayfit.wayfitpleos.data.repository.DefaultVehicleRepository
+import com.wayfit.wayfitpleos.data.repository.DefaultVisitRepository
 import com.wayfit.wayfitpleos.data.repository.DefaultVoiceRepository
 import com.wayfit.wayfitpleos.data.repository.LocationRepository
 import com.wayfit.wayfitpleos.data.repository.NaviRepository
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
 import com.wayfit.wayfitpleos.data.repository.StoreRepository
 import com.wayfit.wayfitpleos.data.repository.VehicleRepository
+import com.wayfit.wayfitpleos.data.repository.VisitRepository
 import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import dagger.Binds
 import dagger.Module
@@ -49,6 +51,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCouponRepository(repository: DefaultCouponRepository): CouponRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindVisitRepository(repository: DefaultVisitRepository): VisitRepository
 
     @Binds
     @Singleton

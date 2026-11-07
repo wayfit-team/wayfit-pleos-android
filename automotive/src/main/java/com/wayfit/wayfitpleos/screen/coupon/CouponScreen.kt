@@ -43,7 +43,7 @@ fun CouponScreen(
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
 
-    val (active, used) = state.coupons.partition { !it.redeemed }
+    val (active, used) = state.coupons.partition { it.usable }
 
     // 넓은 화면에서도 읽기 좋은 폭으로 가운데 정렬
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -107,7 +107,7 @@ fun CouponScreen(
         }
         items(active, key = { it.id }) { TicketCard(it) }
         if (used.isNotEmpty()) {
-            item { SectionLabel("사용 완료", Modifier.padding(top = WayfitSpace.S)) }
+            item { SectionLabel("사용 완료 · 만료", Modifier.padding(top = WayfitSpace.S)) }
             items(used, key = { it.id }) { TicketCard(it) }
         }
     }

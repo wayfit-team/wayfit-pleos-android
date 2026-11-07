@@ -13,18 +13,22 @@ data class Recommendation(
     val reason: String?,
 )
 
-/** 다음에 추천할 매장과 거리·이유를 정한다 (Spec REQ-A2, A5) */
+/** 다음에 추천할 매장과 거리·이유를 정하고 노출을 기록한다 (Spec REQ-A2, A5) */
 class RecommendStoreUseCase @Inject constructor(
     private val storeRepository: StoreRepository,
     private val vehicleRepository: VehicleRepository,
     private val currentLocation: CurrentLocation,
+    private val tripSession: TripSession,
 ) {
     private var nextIndex = 0
 
-    suspend operator fun invoke(): Recommendation {
+    /** 경로 위에 추천할 매장이 없으면 null. 서버 조회에 실패하면 예외 */
+    suspend operator fun invoke(): Recommendation? {
         val here = currentLocation.get()
         val stores = storeRepository.getRecommendableStores(here)
+        if (stores.isEmpty()) return null
         val store = stores[nextIndex++ % stores.size]
+        storeRepository.recordImpression(store, tripSession.tripId)
         val longDrive = (vehicleRepository.drivingMinutes.value ?: 0) >= TripPolicy.LONG_DRIVE_MINUTES
         return Recommendation(
             store = store,
