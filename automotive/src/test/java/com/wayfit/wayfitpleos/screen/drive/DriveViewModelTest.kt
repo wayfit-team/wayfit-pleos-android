@@ -3,25 +3,29 @@ package com.wayfit.wayfitpleos.screen.drive
 import com.wayfit.wayfitpleos.data.repository.CouponRepository
 import com.wayfit.wayfitpleos.domain.CurrentLocation
 import com.wayfit.wayfitpleos.domain.RecommendStoreUseCase
+import com.wayfit.wayfitpleos.domain.TripSession
 import com.wayfit.wayfitpleos.domain.VisitUseCase
 import com.wayfit.wayfitpleos.domain.VoiceRecommendation
 import com.wayfit.wayfitpleos.data.repository.DemoCommand
 import com.wayfit.wayfitpleos.data.repository.DemoRepository
-import com.wayfit.wayfitpleos.data.repository.DefaultStoreRepository
 import com.wayfit.wayfitpleos.data.repository.LocationRepository
 import com.wayfit.wayfitpleos.data.repository.NaviRepository
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
 import com.wayfit.wayfitpleos.data.repository.SettingsRepository
 import com.wayfit.wayfitpleos.data.repository.StoreRepository
 import com.wayfit.wayfitpleos.data.repository.VehicleRepository
+import com.wayfit.wayfitpleos.data.repository.VisitRepository
 import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import com.wayfit.wayfitpleos.model.Coupon
+import com.wayfit.wayfitpleos.model.EvidenceType
 import com.wayfit.wayfitpleos.model.GeoPoint
 import com.wayfit.wayfitpleos.model.PairedPhone
 import com.wayfit.wayfitpleos.model.RouteSummary
 import com.wayfit.wayfitpleos.model.Store
 import com.wayfit.wayfitpleos.model.TripPolicy
+import com.wayfit.wayfitpleos.model.VerifyResult
 import com.wayfit.wayfitpleos.model.VisitStep
+import com.wayfit.wayfitpleos.testbase.Fixtures
 import com.wayfit.wayfitpleos.testbase.JUnit5Test
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,6 +39,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
+import java.io.IOException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -46,7 +51,7 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class DriveViewModelTest : JUnit5Test() {
 
-    private val store = DefaultStoreRepository.DEMO_STORES.first()
+    private val store = Fixtures.STORE
 
     /** 매장에서 약 700m 떨어진 지점 — 거리 판정만으로는 도착하지 않음 */
     private val here = store.location.offset(northM = 700.0, eastM = 0.0)
@@ -66,6 +71,7 @@ internal class DriveViewModelTest : JUnit5Test() {
     private lateinit var voiceRepository: VoiceRepository
     private lateinit var storeRepository: StoreRepository
     private lateinit var couponRepository: CouponRepository
+    private lateinit var visitRepository: VisitRepository
     private lateinit var pairingRepository: PairingRepository
     private lateinit var settingsRepository: SettingsRepository
     private val demoRepository = DemoRepository()
@@ -96,19 +102,25 @@ internal class DriveViewModelTest : JUnit5Test() {
         voiceRepository = mockk(relaxed = true) {
             coEvery { listen(any()) } returns null
         }
-        storeRepository = mockk {
+        storeRepository = mockk(relaxUnitFun = true) {
             coEvery { getRecommendableStores(any()) } returns listOf(store)
         }
-        couponRepository = mockk {
-            coEvery { issue(any()) } answers { coupon(firstArg()) }
+        couponRepository = mockk(relaxUnitFun = true)
+        visitRepository = mockk(relaxUnitFun = true) {
+            coEvery { create(any(), any()) } returns VISIT_ID
+            coEvery { verify(any(), any()) } returns VerifyResult.Verified(coupon(store))
         }
         pairingRepository = mockk(relaxed = true) { every { phones } returns this@DriveViewModelTest.phones }
         settingsRepository = mockk(relaxed = true) { every { voiceGuideEnabled } returns voiceGuide }
 
         val currentLocation = CurrentLocation(locationRepository, naviRepository)
+        val trip = TripSession()
         sut = DriveViewModel(
-            recommendStore = RecommendStoreUseCase(storeRepository, vehicleRepository, currentLocation),
-            visit = VisitUseCase(naviRepository, locationRepository, vehicleRepository, couponRepository, pairingRepository, currentLocation),
+            recommendStore = RecommendStoreUseCase(storeRepository, vehicleRepository, currentLocation, trip),
+            visit = VisitUseCase(
+                naviRepository, locationRepository, vehicleRepository, couponRepository,
+                pairingRepository, visitRepository, trip, currentLocation,
+            ),
             voice = VoiceRecommendation(voiceRepository, settingsRepository),
             naviRepository = naviRepository,
             demoRepository = demoRepository,
@@ -117,6 +129,22 @@ internal class DriveViewModelTest : JUnit5Test() {
     }
 
     private fun coupon(store: Store) = Coupon("c-test", store.name, store.benefit, code = "123456", expiresInDays = 7)
+
+    private fun collectEvents(): List<DriveEvent> {
+        val events = mutableListOf<DriveEvent>()
+        testScope.backgroundScope.launch { sut.eventFlow.collect(events::add) }
+        testScope.runCurrent()
+        return events
+    }
+
+    private fun arriveAndPark() {
+        geofenceEntered.tryEmit(Unit)
+        testScope.runCurrent()
+        parked.value = true
+        testScope.runCurrent()
+        testScope.advanceTimeBy(1_300)
+        testScope.runCurrent()
+    }
 
     private fun recommend() {
         demoRepository.send(DemoCommand.RECOMMEND)
@@ -159,6 +187,35 @@ internal class DriveViewModelTest : JUnit5Test() {
         assertEquals(0.7, state.distanceKm, 0.01)
         assertEquals(TripPolicy.RECOMMEND_TIMEOUT_SEC, state.secondsLeft)
         assertNull(state.reason)
+    }
+
+    @Test
+    fun `추천 카드를 띄우면 노출을 기록한다`() {
+        recommend()
+
+        verify(exactly = 1) { storeRepository.recordImpression(store, match { it.startsWith("trip_") }) }
+    }
+
+    @Test
+    fun `경로 위에 매장이 없으면 알리고 대기를 유지한다`() {
+        coEvery { storeRepository.getRecommendableStores(any()) } returns emptyList()
+        val events = collectEvents()
+
+        recommend()
+
+        assertInstanceOf(DriveState.Idle::class.java, sut.stateFlow.value)
+        assertEquals(listOf(DriveEvent.ShowMessage("가는 길에 추천할 매장이 없어요")), events)
+    }
+
+    @Test
+    fun `매장 조회에 실패하면 알리고 대기를 유지한다`() {
+        coEvery { storeRepository.getRecommendableStores(any()) } throws IOException("offline")
+        val events = collectEvents()
+
+        recommend()
+
+        assertInstanceOf(DriveState.Idle::class.java, sut.stateFlow.value)
+        assertEquals(listOf(DriveEvent.ShowMessage("추천 매장을 불러오지 못했어요")), events)
     }
 
     @Test
@@ -225,22 +282,33 @@ internal class DriveViewModelTest : JUnit5Test() {
     // region 방문
 
     @Test
-    fun `들를게요를 누르면 경유지를 추가하고 지오펜스를 건다`() {
+    fun `들를게요를 누르면 서버에 방문을 만들고 경유지를 추가하고 지오펜스를 건다`() {
         recommendAndAccept()
 
         val state = sut.stateFlow.value as DriveState.Visiting
         assertEquals(setOf(VisitStep.WAYPOINT), state.done)
         assertEquals(700.0, state.remainingM.toDouble(), 5.0)
+        coVerify { visitRepository.create(store.id, match { it.startsWith("trip_") }) }
         verify { naviRepository.addWaypoint(store) }
         verify { locationRepository.watch(store) }
     }
 
     @Test
+    fun `서버 방문 생성에 실패하면 경유지를 걸지 않고 알린 뒤 대기로 돌아간다`() {
+        coEvery { visitRepository.create(any(), any()) } throws IOException("offline")
+        val events = collectEvents()
+
+        recommendAndAccept()
+
+        assertInstanceOf(DriveState.Idle::class.java, sut.stateFlow.value)
+        verify(exactly = 0) { naviRepository.addWaypoint(any()) }
+        assertEquals(listOf(DriveEvent.ShowMessage("방문을 시작하지 못했어요. 잠시 후 다시 시도해 주세요")), events)
+    }
+
+    @Test
     fun `경유지 추가에 실패하면 알리고 경유지 단계는 완료하지 않는다`() {
         every { naviRepository.addWaypoint(any()) } returns false
-        val events = mutableListOf<DriveEvent>()
-        testScope.backgroundScope.launch { sut.eventFlow.collect(events::add) }
-        testScope.runCurrent()
+        val events = collectEvents()
 
         recommendAndAccept()
 
@@ -249,14 +317,16 @@ internal class DriveViewModelTest : JUnit5Test() {
     }
 
     @Test
-    fun `방문을 취소하면 경유지와 지오펜스를 지우고 대기로 돌아간다`() {
+    fun `방문을 취소하면 서버 방문도 취소하고 경유지와 지오펜스를 지우고 대기로 돌아간다`() {
         recommendAndAccept()
 
         sut.cancelVisit()
+        testScope.runCurrent()
 
         assertInstanceOf(DriveState.Idle::class.java, sut.stateFlow.value)
         verify { naviRepository.removeWaypoint() }
         verify { locationRepository.clearWatch() }
+        coVerify { visitRepository.cancel(VISIT_ID) }
     }
 
     // endregion
@@ -264,7 +334,7 @@ internal class DriveViewModelTest : JUnit5Test() {
     // region 인증
 
     @Test
-    fun `지오펜스 진입 후 P단이면 방문을 인증하고 쿠폰을 발급한다`() {
+    fun `지오펜스 진입 후 P단이면 모은 증거로 서버에 인증하고 쿠폰을 받는다`() {
         recommendAndAccept()
 
         geofenceEntered.tryEmit(Unit)
@@ -281,7 +351,10 @@ internal class DriveViewModelTest : JUnit5Test() {
         val state = sut.stateFlow.value as DriveState.Verified
         assertEquals(store.name, state.coupon.storeName)
         assertFalse(state.phonePaired)
-        coVerify { couponRepository.issue(store) }
+        coVerify {
+            visitRepository.verify(VISIT_ID, match { evidence -> evidence.map { it.type } == listOf(EvidenceType.GEOFENCE_ENTER, EvidenceType.GEAR_PARK) })
+        }
+        verify { couponRepository.add(state.coupon) }
         coVerify { voiceRepository.speak("${store.name} 쿠폰이 도착했어요") }
     }
 
@@ -316,7 +389,55 @@ internal class DriveViewModelTest : JUnit5Test() {
 
         val state = sut.stateFlow.value as DriveState.Visiting
         assertFalse(state.verifying)
-        coVerify(exactly = 0) { couponRepository.issue(any()) }
+        coVerify(exactly = 0) { visitRepository.verify(any(), any()) }
+    }
+
+    @Test
+    fun `서버가 인증을 거절하면 안내하고 방문은 유지한 채 주차 단계만 되돌린다`() {
+        coEvery { visitRepository.verify(any(), any()) } returns
+            VerifyResult.Rejected("VISIT_OUT_OF_RADIUS", "매장 인증 반경 내 위치 증거가 확인되지 않았습니다")
+        val events = collectEvents()
+        recommendAndAccept()
+
+        arriveAndPark()
+
+        val state = sut.stateFlow.value as DriveState.Visiting
+        assertFalse(state.verifying)
+        assertFalse(VisitStep.PARKED in state.done)
+        assertTrue(VisitStep.ARRIVED in state.done)
+        assertEquals(listOf(DriveEvent.ShowMessage("매장 인증 반경 내 위치 증거가 확인되지 않았습니다")), events)
+    }
+
+    @Test
+    fun `거절된 뒤 다시 P단에 넣으면 다시 인증을 요청한다`() {
+        coEvery { visitRepository.verify(any(), any()) } returnsMany listOf(
+            VerifyResult.Rejected("VISIT_NO_PARKING", "주차 미확인"),
+            VerifyResult.Verified(coupon(store)),
+        )
+        recommendAndAccept()
+        arriveAndPark()
+
+        parked.value = false
+        testScope.runCurrent()
+        parked.value = true
+        testScope.runCurrent()
+        testScope.advanceTimeBy(1_300)
+        testScope.runCurrent()
+
+        assertInstanceOf(DriveState.Verified::class.java, sut.stateFlow.value)
+        coVerify(exactly = 2) { visitRepository.verify(VISIT_ID, any()) }
+    }
+
+    @Test
+    fun `인증 요청이 네트워크 오류로 실패하면 안내하고 방문을 유지한다`() {
+        coEvery { visitRepository.verify(any(), any()) } throws IOException("offline")
+        val events = collectEvents()
+        recommendAndAccept()
+
+        arriveAndPark()
+
+        assertInstanceOf(DriveState.Visiting::class.java, sut.stateFlow.value)
+        assertEquals(listOf(DriveEvent.ShowMessage("인증 요청을 보내지 못했어요")), events)
     }
 
     @Test
@@ -371,7 +492,27 @@ internal class DriveViewModelTest : JUnit5Test() {
 
         assertInstanceOf(DriveState.Verified::class.java, sut.stateFlow.value)
         verify { vehicleRepository.demoSetParked(true) }
-        // P단 스트림 한 경로로만 인증 → 쿠폰은 한 장 (리뷰: onParked 중복 호출)
-        coVerify(exactly = 1) { couponRepository.issue(any()) }
+        // P단 스트림 한 경로로만 인증 → 요청은 한 번 (리뷰: onParked 중복 호출)
+        coVerify(exactly = 1) { visitRepository.verify(any(), any()) }
+    }
+
+    @Test
+    fun `DEMO 도착은 차량이 움직이지 않았으므로 매장 위치를 증거 위치로 보낸다`() {
+        recommendAndAccept()
+
+        demoRepository.send(DemoCommand.ARRIVE_AND_PARK)
+        testScope.advanceTimeBy(5_000)
+        testScope.runCurrent()
+
+        coVerify {
+            visitRepository.verify(VISIT_ID, match { evidence ->
+                evidence.map { it.type } == listOf(EvidenceType.LOCATION, EvidenceType.GEAR_PARK) &&
+                    evidence.all { it.location == store.serverLocation }
+            })
+        }
+    }
+
+    private companion object {
+        const val VISIT_ID = "visit_1"
     }
 }

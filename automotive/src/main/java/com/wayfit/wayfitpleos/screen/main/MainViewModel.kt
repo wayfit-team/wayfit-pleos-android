@@ -52,7 +52,7 @@ class MainViewModel @Inject constructor(
                         it.copy(
                             parked = parked == true,
                             longDrive = (minutes ?: 0) >= TripPolicy.LONG_DRIVE_MINUTES,
-                            activeCouponCount = coupons.count { c -> !c.redeemed },
+                            activeCouponCount = coupons.count { c -> c.usable },
                         )
                     }
                 }
@@ -79,6 +79,11 @@ class MainViewModel @Inject constructor(
             }
             Log.i(TAG, "SDK status: $sdk")
             updateState { it.copy(sdk = sdk) }
+        }
+        // 첫 실행이면 여기서 기기 등록(토큰 발급)도 같이 일어난다
+        viewModelScope.launch {
+            runCatching { couponRepository.refresh() }.onFailure { Log.w(TAG, "coupon refresh failed", it) }
+            runCatching { pairingRepository.refreshPhones() }.onFailure { Log.w(TAG, "phone refresh failed", it) }
         }
     }
 

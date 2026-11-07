@@ -6,7 +6,9 @@ import com.wayfit.wayfitpleos.data.repository.DemoCommand
 import com.wayfit.wayfitpleos.data.repository.DemoRepository
 import com.wayfit.wayfitpleos.data.repository.NaviRepository
 import com.wayfit.wayfitpleos.domain.RecommendStoreUseCase
+import com.wayfit.wayfitpleos.domain.Recommendation
 import com.wayfit.wayfitpleos.domain.VisitEvidence
+import com.wayfit.wayfitpleos.domain.VisitResult
 import com.wayfit.wayfitpleos.domain.VisitUseCase
 import com.wayfit.wayfitpleos.domain.VoiceRecommendation
 import com.wayfit.wayfitpleos.model.RouteSummary
@@ -16,6 +18,7 @@ import com.wayfit.wayfitpleos.model.VisitStep
 import com.wayfit.wayfitpleos.model.VoiceIntent
 import com.wayfit.wayfitpleos.screen.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +47,8 @@ class DriveViewModel @Inject constructor(
 
     private var tripRecommendCount = 0
     private var phaseJob: Job? = null
+    /** 서버 방문 생성. 도착·인증 진행(phaseJob)이 취소해 버리지 않게 따로 둔다 */
+    private var startJob: Job? = null
     private var voiceJob: Job? = null
 
     private val route: RouteSummary get() = naviRepository.route.value ?: DEMO_ROUTE
@@ -89,15 +94,27 @@ class DriveViewModel @Inject constructor(
         stopVoice()
         phaseJob?.cancel()
         val store = state.store
-        val start = visit.start(store)
-        if (start.waypointFailed) sendEvent(DriveEvent.ShowMessage("내비에 경유지를 추가하지 못했어요"))
+        // 화면은 바로 방문으로 넘기고(두 번 수락 방지) 서버 방문 생성 → 경유지 추가는 뒤따라 반영한다
         setState(
             DriveState.Visiting(
                 store = store,
                 remainingM = visit.distanceTo(store) ?: (store.aheadKm * 1000).toInt(),
-                done = if (start.waypointStepDone) setOf(VisitStep.WAYPOINT) else emptySet(),
+                done = emptySet(),
             )
         )
+        startJob = viewModelScope.launch {
+            val start = try {
+                visit.start(store)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.w(TAG, "visit start failed", e)
+                sendEvent(DriveEvent.ShowMessage("방문을 시작하지 못했어요. 잠시 후 다시 시도해 주세요"))
+                setIdle()
+                return@launch
+            }
+            if (start.waypointFailed) sendEvent(DriveEvent.ShowMessage("내비에 경유지를 추가하지 못했어요"))
+            if (start.waypointStepDone) updateStateIf<DriveState.Visiting> { it.copy(done = it.done + VisitStep.WAYPOINT) }
+        }
     }
 
     fun decline() {
@@ -107,8 +124,9 @@ class DriveViewModel @Inject constructor(
     }
 
     fun cancelVisit() {
+        startJob?.cancel()
         phaseJob?.cancel()
-        visit.cancel()
+        viewModelScope.launch { visit.cancel() }
         setIdle()
     }
 
@@ -126,7 +144,8 @@ class DriveViewModel @Inject constructor(
     private fun recommendNext() = viewModelScope.launch {
         if (stateFlow.value !is DriveState.Idle) return@launch
         if (tripRecommendCount >= TripPolicy.MAX_RECOMMEND_PER_TRIP) tripRecommendCount = 0 // 데모 편의상 리셋
-        val recommendation = recommendStore()
+        val recommendation = loadRecommendation() ?: return@launch
+        if (stateFlow.value !is DriveState.Idle) return@launch // 불러오는 사이 다른 단계로 넘어갔으면 버린다
         tripRecommendCount++
 
         phaseJob?.cancel()
@@ -147,6 +166,19 @@ class DriveViewModel @Inject constructor(
             setIdle()
         }
         askByVoice(recommendation.store, recommendation.distanceKm)
+    }
+
+    private suspend fun loadRecommendation(): Recommendation? {
+        val recommendation = try {
+            recommendStore()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, "recommend failed", e)
+            sendEvent(DriveEvent.ShowMessage("추천 매장을 불러오지 못했어요"))
+            return null
+        }
+        if (recommendation == null) sendEvent(DriveEvent.ShowMessage("가는 길에 추천할 매장이 없어요"))
+        return recommendation
     }
 
     private fun askByVoice(store: Store, distanceKm: Double) {
@@ -185,7 +217,7 @@ class DriveViewModel @Inject constructor(
         if (VisitStep.ARRIVED in visiting.done) return
         val distance = visit.distanceTo(visiting.store) ?: return
         updateStateIf<DriveState.Visiting> { if (VisitStep.ARRIVED in it.done) it else it.copy(remainingM = distance) }
-        if (visit.isWithinRadius(visiting.store, distance)) onArrived("LOCATION")
+        if (visit.checkWithinRadius(visiting.store, distance)) onArrived("LOCATION")
     }
 
     private fun onArrived(evidence: String) {
@@ -214,9 +246,24 @@ class DriveViewModel @Inject constructor(
         phaseJob?.cancel()
         phaseJob = viewModelScope.launch {
             delay(1_200)
-            val result = visit.verify(visiting.store)
-            setState(DriveState.Verified(result.coupon, result.phonePaired))
-            voice.announceCoupon(result.coupon.storeName)
+            val result = try {
+                visit.verify()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.w(TAG, "verify failed", e)
+                VisitResult.Rejected("인증 요청을 보내지 못했어요")
+            }
+            when (result) {
+                is VisitResult.Verified -> {
+                    setState(DriveState.Verified(result.coupon, result.phonePaired))
+                    voice.announceCoupon(result.coupon.storeName)
+                }
+                is VisitResult.Rejected -> {
+                    // 방문은 그대로 두고 주차 단계만 되돌린다 → 다시 P단에 넣으면 다시 요청한다
+                    updateStateIf<DriveState.Visiting> { it.copy(done = it.done - VisitStep.PARKED, verifying = false) }
+                    sendEvent(DriveEvent.ShowMessage(result.message))
+                }
+            }
         }
     }
 
@@ -231,6 +278,7 @@ class DriveViewModel @Inject constructor(
                 updateStateIf<DriveState.Visiting> { it.copy(remainingM = remaining) }
                 delay(250)
             }
+            visit.demoArrive()
             onArrived("DEMO")
             delay(800)
             visit.demoPark()

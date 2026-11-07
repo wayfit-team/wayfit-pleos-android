@@ -11,6 +11,7 @@ import com.wayfit.wayfitpleos.data.repository.VoiceRepository
 import com.wayfit.wayfitpleos.model.Coupon
 import com.wayfit.wayfitpleos.model.SdkStatus
 import com.wayfit.wayfitpleos.testbase.JUnit5Test
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -33,6 +34,7 @@ internal class MainViewModelTest : JUnit5Test() {
         listOf(
             Coupon("a", "가게A", "혜택", "111111", 7),
             Coupon("b", "가게B", "혜택", "222222", 0, redeemed = true),
+            Coupon("c", "가게C", "혜택", "333333", 0, expired = true),
         )
     )
 
@@ -60,7 +62,7 @@ internal class MainViewModelTest : JUnit5Test() {
             every { isTtsAvailable } returns true
             every { isSttAvailable } returns false
         }
-        couponRepository = mockk { every { coupons } returns this@MainViewModelTest.coupons }
+        couponRepository = mockk(relaxUnitFun = true) { every { coupons } returns this@MainViewModelTest.coupons }
         pairingRepository = mockk(relaxed = true)
 
         sut = MainViewModel(
@@ -84,7 +86,7 @@ internal class MainViewModelTest : JUnit5Test() {
     }
 
     @Test
-    fun `사용하지 않은 쿠폰만 센다`() {
+    fun `사용·만료되지 않은 쿠폰만 센다`() {
         assertEquals(1, sut.stateFlow.value.activeCouponCount)
     }
 
@@ -106,6 +108,15 @@ internal class MainViewModelTest : JUnit5Test() {
             sut.stateFlow.value.sdk,
         )
         verify { voiceRepository.start() }
+    }
+
+    @Test
+    fun `시작하면 서버에서 쿠폰과 연결된 폰을 받아온다 (첫 실행이면 기기 등록도 이때)`() {
+        sut.startSdks(fusedLocationGranted = true)
+        testScope.runCurrent()
+
+        coVerify(exactly = 1) { couponRepository.refresh() }
+        coVerify(exactly = 1) { pairingRepository.refreshPhones() }
     }
 
     @Test

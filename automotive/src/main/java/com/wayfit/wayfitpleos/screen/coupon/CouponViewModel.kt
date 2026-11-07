@@ -1,5 +1,6 @@
 package com.wayfit.wayfitpleos.screen.coupon
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.wayfit.wayfitpleos.data.repository.CouponRepository
 import com.wayfit.wayfitpleos.data.repository.PairingRepository
@@ -12,8 +13,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class CouponViewModel @Inject constructor(
-    couponRepository: CouponRepository,
-    pairingRepository: PairingRepository,
+    private val couponRepository: CouponRepository,
+    private val pairingRepository: PairingRepository,
 ) : BaseViewModel<CouponState, Event>() {
 
     override fun getInitialState(): CouponState = CouponState()
@@ -24,5 +25,14 @@ class CouponViewModel @Inject constructor(
                 CouponState(coupons, phoneCount = phones.size)
             }.collect(::setState)
         }
+        // 폰에서 사용 처리한 쿠폰·새로 연결된 폰을 반영 (실패하면 갖고 있던 목록을 그대로 보여준다)
+        viewModelScope.launch {
+            runCatching { couponRepository.refresh() }.onFailure { Log.w(TAG, "coupon refresh failed", it) }
+            runCatching { pairingRepository.refreshPhones() }.onFailure { Log.w(TAG, "phone refresh failed", it) }
+        }
+    }
+
+    private companion object {
+        const val TAG = "CouponViewModel"
     }
 }
