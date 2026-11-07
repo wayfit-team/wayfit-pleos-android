@@ -19,12 +19,16 @@ import androidx.compose.material.icons.rounded.PhoneIphone
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.wayfit.wayfitpleos.ui.theme.WayfitColor
 import com.wayfit.wayfitpleos.ui.theme.WayfitSize
 import com.wayfit.wayfitpleos.ui.theme.WayfitSpace
@@ -42,6 +46,11 @@ fun CouponScreen(
     onOpenPairing: () -> Unit,
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // 탭에 들어오거나 앱이 앞으로 올 때마다 바로 받고, 보이는 동안 주기적으로 갱신
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.refreshWhileVisible() }
+    }
 
     val (active, used) = state.coupons.partition { it.usable }
 
